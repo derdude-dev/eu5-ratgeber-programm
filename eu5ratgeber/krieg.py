@@ -44,6 +44,22 @@ def _datum(ym):
     return f"{(ym - 1) // 12}.{(ym - 1) % 12 + 1}.1" if ym else None
 
 
+# Spieltexte WAR_GOAL_CONTROLLER_ATTACKER/DEFENDER und WAR_DESCRIPTION_WITH_WARGOAL, deutsch und englisch; die Seite heißt in den Daten immer deutsch
+ZIEL_KONTROLLE = re.compile(r"(?:Kriegsziel:\s*(Angreifer|Verteidiger) kontrolliert|Wargoal\s*(Attacker|Defender) controls)")
+ZIEL_TEXT = (re.compile(r"Kriegsziel ist (.+?)\.?\s*$"),
+             re.compile(r"Wargoal is to (.+?)\.?\s*(?:\n|$)"))      # englisch steht dahinter eine Zeile mehr: der Kriegsgrund
+
+
+def ziel_kontrolle(text):
+    m = ZIEL_KONTROLLE.match(str(text or ""))
+    return (m.group(1) or {"Attacker": "Angreifer", "Defender": "Verteidiger"}[m.group(2)]) if m else None
+
+
+def ziel_text(text):
+    m = ZIEL_TEXT[0].search(str(text or "")) or ZIEL_TEXT[1].search(str(text or ""))
+    return m.group(1) if m else None
+
+
 def _num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
 
@@ -251,8 +267,6 @@ def build(db, last, names=None, voll_get=None, ortname=None):
         # −23,00 tickend − 4,74 Schlachten + 2,10 Besetzung = −25,64; RG1W score = war_score_in_war 3,16 ist eine andere Größe)
         ws = r2.get("GetWarScore")
         punkte_spiel = (ws if wir_seite == "Angreifer" else -ws if wir_seite == "Verteidiger" else None) if _num(ws) else None
-        zk = re.match(r"Kriegsziel:\s*(Angreifer|Verteidiger) kontrolliert", str(tx.get("aufschluesselung") or ""))
-        zt = re.search(r"Kriegsziel ist (.+?)\.?\s*$", str(tx.get("beschreibung") or ""))
         ziel = (S or {}).get("kriegsziel")
         if ziel:
             bes = {b["ort_id"]: b for b in S["besetzt"]}
@@ -265,7 +279,7 @@ def build(db, last, names=None, voll_get=None, ortname=None):
             "fremd_datum": (lv or {}).get("fremd_datum"),
             "dauer": L.get("length"), "stillstand": L.get("stalling"), "punkte_wir": L.get("score"),
             "punkte_seite": L.get("score_side"), "kriegspunkte": ws, "punkte_spiel": punkte_spiel,
-            "ziel_kontrolle": zk.group(1) if zk else None, "kriegsziel_text": zt.group(1) if zt else None,
+            "ziel_kontrolle": ziel_kontrolle(tx.get("aufschluesselung")), "kriegsziel_text": ziel_text(tx.get("beschreibung")),
             "ticking": r2.get("HasTickingWarScore"), "eroberung": r2.get("IsConquestWar"),
             "fuehrer_a": L.get("fuehrer_a"), "fuehrer_v": L.get("fuehrer_v"), "anz_a": L.get("anz_a"),
             "anz_v": L.get("anz_v") or r2.get("GetDefenderCount"), "ziel_fortschritt": L.get("ziel_fortschritt"),

@@ -29,43 +29,44 @@ import re
 
 from . import gamedata, pfade, wiki
 from . import sprache
+from .sprache import ue
 
-FORMAT = 2           # Aufbau des Zwischenspeichers _techbaum_f<FORMAT>.json; erhöhen, wenn sich statisch() ändert
+FORMAT = 3           # Aufbau des Zwischenspeichers _techbaum_f<FORMAT>.json; erhöhen, wenn sich statisch() ändert
 #                      2 (30.10., Prüfer): Wiki-Verweise nur auf Ordner, die das Wiki führt; Politiken direkt
 GAME = gamedata.GAME_DIR
 
 # ---------------------------------------------------------------- Themen (Regel des Ratgebers: Einordnung nach der Spieldatei)
 # (Muster des Dateinamens ohne .txt, Thema) – das erste passende Muster gilt
 THEMEN = [
-    (r"^0_age_of_", "Allgemein"), (r"^1_building_unlocks$", "Gebäude"), (r"^2_army_unlocks$", "Landheer"),
-    (r"^2_ship_unlocks$", "Flotte"), (r"^3_cabinet_actions_unlocks$", "Kabinettsaktionen"),
-    (r"^3_character_interaction_unlocks$", "Interaktionen"), (r"^3_fort_level$", "Festungen"),
-    (r"^3_production_method_unlocks$", "Produktionsmethoden"), (r"^3_reform_unlocks$", "Reformen"),
-    (r"^3_road_unlocks$", "Straßen"), (r"^3_supply_limit$", "Versorgung"),
-    (r"^4_choices_adm$", "Konzentration: Verwaltungsfähigkeit"), (r"^4_choices_dip$", "Konzentration: Diplomatiefähigkeit"),
-    (r"^4_choices_mil$", "Konzentration: Militärfähigkeit"), (r"^diplomacy_unlocks$", "Diplomatie"),
-    (r"^canal_advances$", "Kanäle"), (r"^government_", "Regierungsform"), (r"^ctype_", "Landestyp"), (r"^estate_", "Stände"),
-    (r"^religion_", "Religion"), (r"^culture_", "Kultur"),
-    (r"^(country_|d009_country_|D008_byzantine|japanese_unique)", "Land (einzigartig)"),
-    (r"^(region_|d009_region_|d009_saqaliba|new_world|colonial_nations|frankokratia|beyliks)", "Region"),
+    (r"^0_age_of_", ue("Allgemein")), (r"^1_building_unlocks$", ue("Gebäude")), (r"^2_army_unlocks$", ue("Landheer")),
+    (r"^2_ship_unlocks$", ue("Flotte")), (r"^3_cabinet_actions_unlocks$", ue("Kabinettsaktionen")),
+    (r"^3_character_interaction_unlocks$", ue("Interaktionen")), (r"^3_fort_level$", ue("Festungen")),
+    (r"^3_production_method_unlocks$", ue("Produktionsmethoden")), (r"^3_reform_unlocks$", ue("Reformen")),
+    (r"^3_road_unlocks$", ue("Straßen")), (r"^3_supply_limit$", ue("Versorgung")),
+    (r"^4_choices_adm$", ue("Konzentration: Verwaltungsfähigkeit")), (r"^4_choices_dip$", ue("Konzentration: Diplomatiefähigkeit")),
+    (r"^4_choices_mil$", ue("Konzentration: Militärfähigkeit")), (r"^diplomacy_unlocks$", ue("Diplomatie")),
+    (r"^canal_advances$", ue("Kanäle")), (r"^government_", ue("Regierungsform")), (r"^ctype_", ue("Landestyp")), (r"^estate_", ue("Stände")),
+    (r"^religion_", ue("Religion")), (r"^culture_", ue("Kultur")),
+    (r"^(country_|d009_country_|D008_byzantine|japanese_unique)", ue("Land (einzigartig)")),
+    (r"^(region_|d009_region_|d009_saqaliba|new_world|colonial_nations|frankokratia|beyliks)", ue("Region")),
 ]
-THEMA_SONST = "Sonstiges"
+THEMA_SONST = ue("Sonstiges")
 # Konzentration je Zeitalter (Feld for; Spielstand age_preferences = ADM/DIP/MIL) – Namen laut game_concept_adm/dip/mil
-KONZENTRATION = {"adm": "Verwaltungsfähigkeit", "dip": "Diplomatiefähigkeit", "mil": "Militärfähigkeit"}
+KONZENTRATION = {"adm": ue("Verwaltungsfähigkeit"), "dip": ue("Diplomatiefähigkeit"), "mil": ue("Militärfähigkeit")}
 
 # Freischaltungen: Feld -> (Ordner des Spielwissens für Name und Wiki-Verweis, Bezeichnung)
 FREI = {
-    "unlock_building": ("building_types", "Gebäude"), "unlock_unit": ("unit_types", "Einheit"),
-    "unlock_production_method": (None, "Produktionsmethode"), "unlock_law": ("laws", "Gesetz"),
-    "unlock_policy": (None, "Gesetzesoption"), "unlock_government_reform": ("government_reforms", "Reform"),
-    "unlock_estate_privilege": ("estate_privileges", "Privileg"), "unlock_cabinet_action": ("cabinet_actions", "Kabinettsaktion"),
-    "unlock_levy": ("levies", "Aufgebot"), "unlock_chivalric_order": ("chivalric_orders", "Ritterorden"),
-    "unlock_subject_type": ("subject_types", "Untertanenart"), "unlock_town_rights": ("town_rights", "Stadtrecht"),
-    "unlock_heir_selection": ("heir_selections", "Erbfolge"), "unlock_casus_belli": ("casus_belli", "Kriegsgrund"),
-    "unlock_road_type": ("road_types", "Straßenart"), "unlock_ability": ("unit_abilities", "Fähigkeit"),
-    "unlock_interaction": ("character_interactions", "Charakter-Interaktion"),
-    "unlock_country_interaction": ("country_interactions", "Länder-Interaktion"),
-    "unlock_diplomacy": ("country_interactions", "Diplomatie"), "unlock_relation_type": (None, "Beziehungsart"),
+    "unlock_building": ("building_types", ue("Gebäude")), "unlock_unit": ("unit_types", ue("Einheit")),
+    "unlock_production_method": (None, ue("Produktionsmethode")), "unlock_law": ("laws", ue("Gesetz")),
+    "unlock_policy": (None, ue("Gesetzesoption")), "unlock_government_reform": ("government_reforms", ue("Reform")),
+    "unlock_estate_privilege": ("estate_privileges", ue("Privileg")), "unlock_cabinet_action": ("cabinet_actions", ue("Kabinettsaktion")),
+    "unlock_levy": ("levies", ue("Aufgebot")), "unlock_chivalric_order": ("chivalric_orders", ue("Ritterorden")),
+    "unlock_subject_type": ("subject_types", ue("Untertanenart")), "unlock_town_rights": ("town_rights", ue("Stadtrecht")),
+    "unlock_heir_selection": ("heir_selections", ue("Erbfolge")), "unlock_casus_belli": ("casus_belli", ue("Kriegsgrund")),
+    "unlock_road_type": ("road_types", ue("Straßenart")), "unlock_ability": ("unit_abilities", ue("Fähigkeit")),
+    "unlock_interaction": ("character_interactions", ue("Charakter-Interaktion")),
+    "unlock_country_interaction": ("country_interactions", ue("Länder-Interaktion")),
+    "unlock_diplomacy": ("country_interactions", ue("Diplomatie")), "unlock_relation_type": (None, ue("Beziehungsart")),
 }
 # Felder, die keine Wirkung sind (Aufbau, Bedingungen, KI)
 FELDER = {"age", "icon", "requires", "potential", "allow", "government", "country_type", "for", "research_cost", "depth",
@@ -76,49 +77,49 @@ FELDER = {"age", "icon", "requires", "potential", "allow", "government", "countr
 # Punkte je Grund; Summe = Reihung, bei Gleichstand billiger (Forschungskosten), dann niedrigere Stufe im Baum, dann Name.
 # n = Rang des Guts im Schwerpunkt (Bedarfstabelle der Kachel Wirtschaftsplan, 1 = vorne).
 PUNKTE = {
-    "gut_gebaeude": "30 − 2 je Rang (mind. 10), +5 wenn knapp – schaltet ein Gebäude frei, das ein Schwerpunkt-Gut herstellt",
-    "gut_fehlt": "12 – Gebäude oder Methode für ein Schwerpunkt-Gut, das im Heimatmarkt fehlt",
-    "gut_methode": "20 − 1 je Rang (mind. 8) – Produktionsmethode für ein Schwerpunkt-Gut",
-    "gut_ausstoss": "15 − 1 je Rang (mind. 6) – Ausstoß-Modifikator eines Schwerpunkt-Guts",
-    "gebaeude_wirkung": "20 – schaltet ein Gebäude mit Schwerpunkt-Wirkung frei (Liste „Gebäude mit Wirkung“ im Wirtschaftsplan)",
-    "fokus_mod": "15 – landesweiter Modifikator zur Schwerpunkt-Wirkung der Gebäude (local_x -> global_x)",
-    "einheit": "20 – schaltet eine Einheit des Schwerpunkts frei (Landheer: army_…, Marine: navy_…)",
-    "thema_mod": "10 – Modifikator aus der Themenliste des Schwerpunkts (THEMA_REGEL), nur günstige Richtung",
-    "thema_frei": "8 – Freischaltung aus der Themenliste des Schwerpunkts",
+    "gut_gebaeude": ue("30 − 2 je Rang (mind. 10), +5 wenn knapp – schaltet ein Gebäude frei, das ein Schwerpunkt-Gut herstellt"),
+    "gut_fehlt": ue("12 – Gebäude oder Methode für ein Schwerpunkt-Gut, das im Heimatmarkt fehlt"),
+    "gut_methode": ue("20 − 1 je Rang (mind. 8) – Produktionsmethode für ein Schwerpunkt-Gut"),
+    "gut_ausstoss": ue("15 − 1 je Rang (mind. 6) – Ausstoß-Modifikator eines Schwerpunkt-Guts"),
+    "gebaeude_wirkung": ue("20 – schaltet ein Gebäude mit Schwerpunkt-Wirkung frei (Liste „Gebäude mit Wirkung“ im Wirtschaftsplan)"),
+    "fokus_mod": ue("15 – landesweiter Modifikator zur Schwerpunkt-Wirkung der Gebäude (local_x -> global_x)"),
+    "einheit": ue("20 – schaltet eine Einheit des Schwerpunkts frei (Landheer: army_…, Marine: navy_…)"),
+    "thema_mod": ue("10 – Modifikator aus der Themenliste des Schwerpunkts (THEMA_REGEL), nur günstige Richtung"),
+    "thema_frei": ue("8 – Freischaltung aus der Themenliste des Schwerpunkts"),
 }
 # Themenliste je Schwerpunkt: (Beschreibung, Muster der Modifikatoren, Freischaltungs-Felder)
 THEMA_REGEL = {
-    "grundwirtschaft": ("Produktion und Rohstoffe", r"^(global_production_efficiency|global_raw_material_output|"
+    "grundwirtschaft": (ue("Produktion und Rohstoffe"), r"^(global_production_efficiency|global_raw_material_output|"
                         r"global_max_rgo_size_modifier|expand_rgo_\w+_cost_modifier|global_monthly_prosperity|"
                         r"global_monthly_development)$", ()),
-    "gewinn": ("Produktion, Wohlstand und Steuern", r"^(global_production_efficiency|tax_income_efficiency|global_monthly_prosperity|"
+    "gewinn": (ue("Produktion, Wohlstand und Steuern"), r"^(global_production_efficiency|tax_income_efficiency|global_monthly_prosperity|"
                r"global_non_rural_monthly_prosperity|global_max_rgo_size_modifier|global_raw_material_output|"
                r"minting_income_factor)$", ()),
-    "bevoelkerung": ("Wachstum, Nahrung und Zuzug", r"^(global_population_growth|global_population_capacity_modifier|"
+    "bevoelkerung": (ue("Wachstum, Nahrung und Zuzug"), r"^(global_population_growth|global_population_capacity_modifier|"
                      r"global_monthly_food_modifier|global_food_capacity(_modifier)?|"           # nicht global_life_expectancy:
                      # „Charakterlebenserwartung“ (Prüfer 30.10.)
                      r"global_migration_\w+|\w*migration_attraction)$", ()),
-    "landheer": ("Landheer", r"^(global_manpower_modifier|land_\w+|discipline|military_tactics|army_\w+|regiment_\w+|"
+    "landheer": (ue("Landheer"), r"^(global_manpower_modifier|land_\w+|discipline|military_tactics|army_\w+|regiment_\w+|"
                  r"global_regiment_\w+|siege_ability|global_levy_size_modifier|global_supply_limit_modifier|"
                  r"global_hostile_attrition)$", ("unlock_levy",)),
-    "marine": ("Flotte", r"^(global_sailors_modifier|naval_\w+|navy_\w+|ship_\w+|privateer_\w+|global_navy_levy_size_modifier|"
+    "marine": (ue("Flotte"), r"^(global_sailors_modifier|naval_\w+|navy_\w+|ship_\w+|privateer_\w+|global_navy_levy_size_modifier|"
                r"global_maritime_presence_modifier|blockade_\w+)$", ()),
-    "expansion": ("Erkundung und Kolonisierung", r"^(may_explore|can_colonize|colonial_\w+|exploration_\w+|global_colonial_\w+|"
+    "expansion": (ue("Erkundung und Kolonisierung"), r"^(may_explore|can_colonize|colonial_\w+|exploration_\w+|global_colonial_\w+|"
                   r"colonist\w*|expedition\w*)$", ()),
-    "export": ("Handel (Ausfuhr)", r"^(global_merchant_capacity_modifier|trade_range(_modifier)?|export_efficiency|"
+    "export": (ue("Handel (Ausfuhr)"), r"^(global_merchant_capacity_modifier|trade_range(_modifier)?|export_efficiency|"
                r"selling_efficiency|trade_(land|sea)_efficiency|global_trade_center_power|global_merchant_power|"
                r"merchant_power_\w+|global_trades_per_burgher|max_tariff|merchant_maintenance_efficiency)$", ()),
-    "import": ("Handel (Einfuhr)", r"^(global_merchant_capacity_modifier|trade_range(_modifier)?|trade_(land|sea)_efficiency|"
+    "import": (ue("Handel (Einfuhr)"), r"^(global_merchant_capacity_modifier|trade_range(_modifier)?|trade_(land|sea)_efficiency|"
                r"global_merchant_power|merchant_power_\w+|global_trades_per_burgher|merchant_maintenance_efficiency)$", ()),
-    "bau": ("Bauen", r"^(global_build_buildings_efficiency|global_urban_build_buildings_efficiency|"
+    "bau": (ue("Bauen"), r"^(global_build_buildings_efficiency|global_urban_build_buildings_efficiency|"
             r"global_rural_build_buildings_efficiency|global_construction_speed|build_\w+_road_cost_modifier|"
             r"global_road_building_time|town_upgrade_cost_modifier)$", ("unlock_road_type", "unlock_town_rights")),
-    "verwaltung": ("Verwaltung und Hof", r"^(legislative_efficiency|country_cabinet_efficiency|court_spending_efficiency|"
+    "verwaltung": (ue("Verwaltung und Hof"), r"^(legislative_efficiency|country_cabinet_efficiency|court_spending_efficiency|"
                    r"government_reform_slots|global_integration_speed_modifier|global_monthly_control|stability_\w+|"
                    r"government_size|bureaucracy_\w+|monthly_political_influence\w*|diplomatic_capacity(_modifier)?)$",
                    ("unlock_law", "unlock_government_reform", "unlock_estate_privilege", "unlock_cabinet_action",
                     "unlock_policy")),
-    "lebensstandard": ("Zufriedenheit der Stände", r"^(global_estate_target_satisfaction|\w+_estate_target_satisfaction|"
+    "lebensstandard": (ue("Zufriedenheit der Stände"), r"^(global_estate_target_satisfaction|\w+_estate_target_satisfaction|"
                        r"\w+_estate_satisfaction_recovery)$", ()),
 }
 EINHEIT_PREFIX = {"landheer": "army_", "marine": "navy_"}
@@ -126,8 +127,8 @@ TOP = 6              # Vorschläge je Schwerpunkt (jetzt erforschbar)
 TOP_ZIELE = 4        # Ziele je Schwerpunkt (tiefer, kurzer Weg)
 ZIEL_SCHRITTE = 3    # höchstens so viele fehlende Voraussetzungen vor dem Ziel
 
-STATUS = {"e": "erforscht", "j": "jetzt erforschbar", "v": "Voraussetzungen fehlen", "s": "späteres Zeitalter",
-          "n": "nicht für uns", "u": "unklar (Bedingung nicht auswertbar)"}
+STATUS = {"e": ue("erforscht"), "j": ue("jetzt erforschbar"), "v": ue("Voraussetzungen fehlen"), "s": ue("späteres Zeitalter"),
+          "n": ue("nicht für uns"), "u": ue("unklar (Bedingung nicht auswertbar)")}
 
 
 def _liste(v):
@@ -209,19 +210,19 @@ def wert(m, v, mt, const):
     if isinstance(v, str) and v in const:
         v = const[v]
     if v == "yes":
-        return "ja", None, 1
+        return ue("ja"), None, 1
     if not _num(v):
-        return f"{v} (Skriptwert, nicht aufgelöst)", None, 0
+        return ue(t"{v} (Skriptwert, nicht aufgelöst)"), None, 0
     if t.get("boolean") == "yes":
-        return ("ja" if v else "nein"), v, 1 if v else -1
+        return (ue("ja") if v else ue("nein")), v, 1 if v else -1
     d = int(t["decimals"]) if str(t.get("decimals", "")).isdigit() else None
     if (t.get("game_data") or {}).get("format") in ("FormatManPower", "FormatPopCaps"):
         # Mannstärke, Seeleute, Bevölkerungsgrenze zählen in Tausend wie Pops (wie wirtschaftsplan.modtxt)
-        txt = _sgn(v, 3) + " Tsd."
+        txt = _sgn(v, 3) + ue(" Tsd.")
     elif t.get("percent") == "yes":
-        txt = _sgn(v * 100, d if d is not None else 2) + " %"
+        txt = ue(t"{_sgn(v * 100, d if d is not None else 2)} %")
     elif t.get("already_percent") == "yes":
-        txt = _sgn(v, d if d is not None else 2) + " %"
+        txt = ue(t"{_sgn(v, d if d is not None else 2)} %")
     else:
         txt = _sgn(v, d if d is not None else (3 if abs(v) < 0.1 else 2))
     farbe = t.get("color")
@@ -293,7 +294,7 @@ def statisch(voll, names=None, vg=None, game_dir=GAME):
                      else {}).items():
             if m in mt:
                 txt, zahl, ri = wert(m, v, mt, const)
-                w.append([m, (mt[m].get("name") or m) + " (während der Forschung)", txt, ri])
+                w.append([m, (mt[m].get("name") or m) + ue(" (während der Forschung)"), txt, ri])
         u = []
         for feld, (o, label) in FREI.items():
             for x in _liste(d.get(feld)):
@@ -409,7 +410,7 @@ def fakten(last, vg, wis=None, dlcs=None):
         # aktive Erweiterungen: Spielstand-Kopf (enabled_dlcs), falls die Momentaufnahme ihn trägt, sonst installierte (Spielordner dlc/)
         "dlcs": [str(x).lower() for x in (meta.get("dlcs") if meta.get("dlcs") is not None else dlcs)]
         if (meta.get("dlcs") is not None or dlcs is not None) else None,
-        "dlcs_quelle": "Spielstand" if meta.get("dlcs") is not None else "Spielordner (installiert)" if dlcs is not None else None,
+        "dlcs_quelle": ue("Spielstand") if meta.get("dlcs") is not None else ue("Spielordner (installiert)") if dlcs is not None else None,
         "zeitalter": meta.get("zeitalter"),
         "zeitalter_folge": [k for k, v in sorted(((k, v) for k, v in (vg("age") or {}).items() if isinstance(v.get("def"), dict)),
                                                  key=lambda kv: kv[1]["def"].get("year") or 0)],
@@ -437,9 +438,9 @@ def _ohne(v):
     return v.split(":", 1)[1] if isinstance(v, str) and ":" in v else v
 
 
-ORT_FELD = {"region": ("region", "Region"), "area": ("gebiet", "Gebiet"), "sub_continent": ("subkontinent", "Subkontinent"),
-            "continent": ("kontinent", "Kontinent"), "province": ("provinz", "Provinz")}
-ORT_SCOPE = {"capital": ("hauptstadt", "Hauptstadt"), "original_capital": ("ur_hauptstadt", "Hauptstadt bei Spielbeginn")}
+ORT_FELD = {"region": ("region", ue("Region")), "area": ("gebiet", ue("Gebiet")), "sub_continent": ("subkontinent", ue("Subkontinent")),
+            "continent": ("kontinent", ue("Kontinent")), "province": ("provinz", ue("Provinz"))}
+ORT_SCOPE = {"capital": ("hauptstadt", ue("Hauptstadt")), "original_capital": ("ur_hauptstadt", ue("Hauptstadt bei Spielbeginn"))}
 VERGLEICH = {">": lambda a, b: a > b, ">=": lambda a, b: a >= b, "<": lambda a, b: a < b, "<=": lambda a, b: a <= b}
 
 
@@ -480,16 +481,16 @@ class Bedingung:
             kinder, _ = self.block(x, scope)
             w = [n[1] for n in kinder]
             nor, nand = _nicht(_oder(w)), _nicht(_und(w))
-            return ["keine davon:" if nor == nand else "nicht (mehrere Bedingungen – ob „keins davon“ oder „nicht alle zugleich“, "
-                    "ist nicht belegt):", nor if nor == nand else None, kinder]
+            return [ue("keine davon:") if nor == nand else ue("nicht (mehrere Bedingungen – ob „keins davon“ oder „nicht alle zugleich“, "
+                    "ist nicht belegt):"), nor if nor == nand else None, kinder]
         if k in ("OR", "AND", "NOR", "NAND"):
             kinder, ok = self.block(x, scope, "oder" if k in ("OR", "NOR") else "und")
-            text = {"OR": "eine davon:", "AND": "alle:", "NOT": "keine davon:", "NOR": "keine davon:",
-                    "NAND": "nicht alle:"}[k]
+            text = {"OR": ue("eine davon:"), "AND": "alle:", "NOT": ue("keine davon:"), "NOR": ue("keine davon:"),
+                    "NAND": ue("nicht alle:")}[k]
             return [text, _nicht(ok) if k in ("NOT", "NOR", "NAND") else ok, kinder]
         if k in ("custom_tooltip", "custom_description") and isinstance(x, dict):
             kinder, ok = self.block({a: b for a, b in x.items() if a not in ("text", "subject", "object")}, scope)
-            return [f"Spieltext {x.get('text')}:", ok, kinder]
+            return [ue(t"Spieltext {x.get('text')}:"), ok, kinder]
         if k in ("current_age", "current_age_or_later"):
             folge = F.get("zeitalter_folge") or []
             ziel = _ohne(x.get("age") if isinstance(x, dict) else x)
@@ -498,7 +499,7 @@ class Bedingung:
                 ok = i == j if k == "current_age" else i >= j
             else:
                 ok = None
-            return [f"Zeitalter {self.name('age', ziel)}" + (" oder später" if k == "current_age_or_later" else ""), ok, []]
+            return [ue(t"Zeitalter {self.name('age', ziel)}") + (ue(" oder später") if k == "current_age_or_later" else ""), ok, []]
         st = (self.vg("scripted_triggers") or {}).get(k)
         if st and isinstance(st.get("def"), dict) and x in ("yes", "no") and self.tiefe < 6:
             self.tiefe += 1
@@ -506,7 +507,7 @@ class Bedingung:
                 kinder, ok = self.block(st["def"], scope)
             finally:
                 self.tiefe -= 1
-            return [f"Spielbedingung {k}{' = nein' if x == 'no' else ''} (scripted_triggers):",
+            return [ue(t"Spielbedingung {k}{ue(' = nein') if x == 'no' else ''} (scripted_triggers):"),
                     ok if x == "yes" else _nicht(ok), kinder]
         m = re.match(r"^([\w.:]+?)(\?=|>=|<=|>|<)?$", k)
         k0, op = (m.group(1), m.group(2)) if m else (k, None)
@@ -514,12 +515,12 @@ class Bedingung:
         if scope == "kultur":
             if k0 == "has_culture_group":
                 g = F.get("kulturgruppen")
-                return [f"Kulturgruppe {self.name('culture_groups', x)}", None if g is None else _ohne(x) in g, []]
+                return [ue(t"Kulturgruppe {self.name('culture_groups', x)}"), None if g is None else _ohne(x) in g, []]
             if k0 == "merged_culture_group_contains_culture":
                 # Spieldoku (triggers.log): „True if this merged culture was formed from a culture group that contained the target
                 # culture“ – nur zusammengelegte Kulturen; eine feste Kultur aus cultures.json ist keine
                 ok = None if not F.get("kultur") else (False if F.get("kultur_fest") else None)
-                return [f"zusammengelegte Kultur, entstanden aus einer Gruppe mit {self.name('cultures', x)}", ok, []]
+                return [ue(t"zusammengelegte Kultur, entstanden aus einer Gruppe mit {self.name('cultures', x)}"), ok, []]
         if scope.startswith("ort:"):
             h = F.get(scope[4:])
             if k0 in ORT_FELD:
@@ -537,45 +538,45 @@ class Bedingung:
             return [f"{label}:", ok, kinder]
         if k0 == "culture" and isinstance(x, dict):
             kinder, ok = self.block(x, "kultur")
-            return ["Kultur:", ok, kinder]
+            return [ue("Kultur:"), ok, kinder]
         if k0 == "culture":
-            return [f"Kultur {self.name('cultures', x)}", None if F.get("kultur") is None else _ohne(x) == F["kultur"], []]
+            return [ue(t"Kultur {self.name('cultures', x)}"), None if F.get("kultur") is None else _ohne(x) == F["kultur"], []]
         if k0 == "culture.language":
-            return [f"Sprache der Kultur {self.name('languages', x)}",
+            return [ue(t"Sprache der Kultur {self.name('languages', x)}"),
                     None if F.get("sprache") is None else _ohne(x) == F["sprache"], []]
         if k0 == "religion" and isinstance(x, str):
-            return [f"Religion {self.name('religions', x)}", None if F.get("religion") is None else _ohne(x) == F["religion"], []]
+            return [ue(t"Religion {self.name('religions', x)}"), None if F.get("religion") is None else _ohne(x) == F["religion"], []]
         if k0 == "religion.group":
-            return [f"Religionsgruppe {self.name('religion_groups', x)}",
+            return [ue(t"Religionsgruppe {self.name('religion_groups', x)}"),
                     None if F.get("religionsgruppe") is None else _ohne(x) == F["religionsgruppe"], []]
         if k0 in ("has_or_had_tag", "tag", "original_tag") and isinstance(x, str):
             menge = {"has_or_had_tag": F.get("tags"), "tag": [F.get("tag")] if F.get("tag") else None,
                      "original_tag": [F.get("original_tag")] if F.get("original_tag") else None}[k0]
-            text = {"has_or_had_tag": "Land ist oder war", "tag": "Land ist", "original_tag": "Ursprüngliches Land"}[k0]
+            text = {"has_or_had_tag": ue("Land ist oder war"), "tag": ue("Land ist"), "original_tag": ue("Ursprüngliches Land")}[k0]
             return [f"{text} {self.nm(x)} ({x})", None if menge is None else x in menge, []]
         if k0 == "has_dlc":
             d = F.get("dlcs")
-            return [f"Erweiterung {x}", None if d is None else str(x).lower() in d, []]
+            return [ue(t"Erweiterung {x}"), None if d is None else str(x).lower() in d, []]
         if k0 == "government_type":
-            return [f"Regierungsform {self.name('government_types', x)}",
+            return [ue(t"Regierungsform {self.name('government_types', x)}"),
                     None if F.get("regierung") is None else _ohne(x) == F["regierung"], []]
         if k0 == "has_reform":
             r = F.get("reformen")
-            return [f"Reform {self.name('government_reforms', x)}", None if r is None else _ohne(x) in r, []]
+            return [ue(t"Reform {self.name('government_reforms', x)}"), None if r is None else _ohne(x) in r, []]
         if k0 == "has_unlocked_advance_trigger" and isinstance(x, dict) and isinstance(x.get("type"), str):
             e = F.get("erforscht")
             a = (self.vg("advances") or {}).get(x["type"]) or {}
-            return [f"Fortschritt {a.get('name') or x['type']} erforscht", None if e is None else x["type"] in e, []]
+            return [ue(t"Fortschritt {a.get('name') or x['type']} erforscht"), None if e is None else x["type"] in e, []]
         if k0 == "has_embraced_institution":
             i = F.get("institutionen")
-            return [f"Institution {self.name('institution', x)} eingeführt", None if i is None else _ohne(x) in i, []]
+            return [ue(t"Institution {self.name('institution', x)} eingeführt"), None if i is None else _ohne(x) in i, []]
         if k0 == "country_has_estate":
             s = F.get("staende")
-            return [f"Land hat den Stand {self.name('estates', x)}", None if s is None else _ohne(x) in s, []]
+            return [ue(t"Land hat den Stand {self.name('estates', x)}"), None if s is None else _ohne(x) in s, []]
         if k0 == "num_locations" and op in VERGLEICH and _num(x):
             n = F.get("orte")
-            return [f"Zahl der Orte {op} {x}", None if n is None else VERGLEICH[op](n, x), []]
-        return [f"{k} = {json.dumps(x, ensure_ascii=False) if not isinstance(x, str) else x} (nicht auswertbar)", None, []]
+            return [ue(t"Zahl der Orte {op} {x}"), None if n is None else VERGLEICH[op](n, x), []]
+        return [ue(t"{k} = {json.dumps(x, ensure_ascii=False) if not isinstance(x, str) else x} (nicht auswertbar)"), None, []]
 
 
 # ---------------------------------------------------------------- Stand des Spielers
@@ -633,7 +634,17 @@ TOOLTIP_BELEGE = (("WAL", "surgery_advance", 0, 32.5), ("WAL", "boyar_regime", 0
 
 KOSTEN_ZEILE = re.compile(r"^\s*(.+?):\s*([+-]?\d+(?:[.,]\d+)?)\s*(%?)\s*$")
 KOSTEN_ART = (("Grundwert", "grund"), ("Vorheriges", "vorher"), ("Fortschritt aus dem Zeitalter", "zeitalter"),
-              ("Zusatzkosten", "zusatz"), ("Einzigartig", "einzig"))
+              ("Zusatzkosten", "zusatz"), ("Einzigartig", "einzig"),
+              # dieselben Schlüssel auf Englisch: BASE_VALUE, PREVIOUS_AGE_RESEARCH_COST, SPECIAL_RESEARCH_COST, COUNTRY_UNIQUE_RESEARCH_COST;
+              # AGE_SPECIFIC_COST steht dort hinten („Age of Renaissance Advance“, kostenart)
+              ("Base", "grund"), ("Previous", "vorher"), ("Specific cost", "zusatz"), ("Unique", "einzig"))
+# RESEARCH_COST_TT: „Benötigt 12.00 von 37.84 Forschungsfortschritt. Dies basiert auf:“, „Research Progress 12.00 of 37.84 required due to:“
+FORTSCHRITT_INFO = re.compile(r"(?:Benötigt|Research Progress)\s*([\d.]+)\s*(?:von|of)\s*([\d.]+)")
+
+
+def kostenart(label):
+    """Art einer Zeile der Kostenaufschlüsselung (Spieltext, deutsch oder englisch)."""
+    return next((a for p, a in KOSTEN_ART if label.startswith(p)), "zeitalter" if label.endswith(" Advance") else "andere")
 
 
 def kostenbelege(db, S):
@@ -660,7 +671,7 @@ def kostenbelege(db, S):
     zuschlag, zusatz, einzig_w, andere = {}, [], [], set()
     for (tag, j, m), t in sorted(je.items()):
         name = (t.get("forsch_fortschritt_name") or "").strip()
-        mm = re.search(r"Benötigt\s*([\d.]+)\s*von\s*([\d.]+)", t.get("forsch_fortschritt_info") or "")
+        mm = FORTSCHRITT_INFO.search(t.get("forsch_fortschritt_info") or "")
         if not name or not mm:
             continue
         y = float(mm.group(2))
@@ -672,7 +683,7 @@ def kostenbelege(db, S):
             mz = KOSTEN_ZEILE.match(z)
             if mz:
                 label = mz.group(1).strip()
-                art = next((a for p, a in KOSTEN_ART if label.startswith(p)), "andere")
+                art = kostenart(label)
                 zeilen.append({"text": label, "wert": float(mz.group(2).replace(",", ".")), "prozent": mz.group(3) == "%",
                                "art": art})
         arten = {x["art"] for x in zeilen}
@@ -753,7 +764,7 @@ def laufend(db, tag):
         if row:
             out[k] = (json.loads(row[2]) or {}).get("text")
             out.setdefault("datum", f"{row[0]}.{row[1]}")
-    m = re.search(r"Benötigt\s*([\d.]+)\s*von\s*([\d.]+)", out.get("info") or "")
+    m = FORTSCHRITT_INFO.search(out.get("info") or "")
     if m:
         out["fortschritt"], out["kosten"] = float(m.group(1)), float(m.group(2))
     row = db.execute("SELECT werte FROM monat_extra WHERE tag=? AND art='a.landmod' ORDER BY jahr DESC, monat DESC LIMIT 1",
@@ -781,29 +792,29 @@ def stand(S, last, F, vg, names=None, live=None, gelernt=None):
         teile = []
         if a.get("pot"):
             kinder, ok = B.block(a["pot"])
-            baum.append(["Bedingung (potential):", ok, kinder])
+            baum.append([ue("Bedingung (potential):"), ok, kinder])
             teile.append(ok)
         if a.get("g"):
             ok = None if not F.get("regierung") else a["g"] == F["regierung"]
-            baum.append([f"Regierungsform {B.name('government_types', a['g'])} (government)", ok, []])
+            baum.append([ue(t"Regierungsform {B.name('government_types', a['g'])} (government)"), ok, []])
             teile.append(ok)
         if a.get("ct"):
             ok = None if not F.get("landestyp") else a["ct"] == F["landestyp"]
-            baum.append([f"Landestyp {a['ct']} (country_type; wir: {F.get('landestyp') or 'unbekannt'})", ok, []])
+            baum.append([ue(t"Landestyp {a['ct']} (country_type; wir: {F.get('landestyp') or ue('unbekannt')})"), ok, []])
             teile.append(ok)
         if a.get("fo"):
             age = S["zeitalter"][a["z"]]["key"] if a.get("z") is not None else None
             gew = (F.get("konzentration") or {}).get(age)
             spaeter = z_jetzt is not None and a.get("z") is not None and a["z"] > z_jetzt
             ok = (a["fo"] == gew) if gew else (True if spaeter else None)
-            baum.append([f"Konzentration im Zeitalter auf „{KONZENTRATION.get(a['fo'], a['fo'])}“ (for; Spielstand: "
-                         f"{KONZENTRATION.get(gew, gew) if gew else 'noch nicht gewählt' if spaeter else 'unbekannt'})", ok, []])
+            baum.append([ue(t"Konzentration im Zeitalter auf „{KONZENTRATION.get(a['fo'], a['fo'])}“ (for; Spielstand: "
+                         t"{KONZENTRATION.get(gew, gew) if gew else ue('noch nicht gewählt') if spaeter else 'unbekannt'})"), ok, []])
             teile.append(ok)
         fuer_uns = _und(teile)
         allow = None
         if a.get("allow"):
             kinder, allow = B.block(a["allow"])
-            baum.append(["Erforschbar nur wenn (allow):", allow, kinder])
+            baum.append([ue("Erforschbar nur wenn (allow):"), allow, kinder])
         if baum:
             bed[k] = baum
         fehlt = [r for r in a["r"] if r not in erforscht]
@@ -818,7 +829,7 @@ def stand(S, last, F, vg, names=None, live=None, gelernt=None):
         elif fehlt or allow is False:
             st = "v"
             if allow is False:
-                grund[k] = "erst wenn: " + "; ".join(_falsch(kinder)) + " (allow)"
+                grund[k] = ue("erst wenn: ") + "; ".join(_falsch(kinder)) + ue(" (allow)")
         elif allow is None and a.get("allow"):
             st = "u"
         else:
@@ -893,8 +904,8 @@ def vorschlaege(S, st, wp, gs=None, mt=None, wis_geb=None):
         def gut_text(g):
             if g in rang:
                 n, r = rang[g]
-                return "Schwerpunkt-Gut" + (" (knapp im Heimatmarkt)" if r.get("knapp") else ""), n, r.get("knapp")
-            return f"im Heimatmarkt nicht vorhanden (Anteil {_de((fehlt[g].get('anteil') or 0) * 100, 0)} %)", None, False
+                return ue("Schwerpunkt-Gut") + (ue(" (knapp im Heimatmarkt)") if r.get("knapp") else ""), n, r.get("knapp")
+            return ue(t"im Heimatmarkt nicht vorhanden (Anteil {_de((fehlt[g].get('anteil') or 0) * 100, 0)} %)"), None, False
 
         def bewerte(k):
             a = A[k]
@@ -908,48 +919,48 @@ def vorschlaege(S, st, wp, gs=None, mt=None, wis_geb=None):
                         if g in rang or g in fehlt:
                             t, n, knapp = gut_text(g)
                             p = 12 if n is None else max(10, 30 - 2 * (n - 1)) + (5 if knapp else 0)
-                            gruende.append([p, f"schaltet {name} frei – stellt {gname(g)} her, {t}"])
+                            gruende.append([p, ue(t"schaltet {name} frei – stellt {gname(g)} her, {t}")])
                             punkte += p
                     if x in wirk:
                         mw = ", ".join(f"{(mt.get(m) or {}).get('name') or m} {wert(m, v, mt, konst)[0]}"
                                        for m, v in {**((GEB.get(x) or {}).get("wirkung") or {}),
                                                     **((GEB.get(x) or {}).get("wirkung_hauptstadt") or {})}.items())
-                        gruende.append([20, f"schaltet {name} frei – Gebäude mit Schwerpunkt-Wirkung ({mw})"])
+                        gruende.append([20, ue(t"schaltet {name} frei – Gebäude mit Schwerpunkt-Wirkung ({mw})")])
                         punkte += 20
                 elif feld == "unlock_production_method" and extra and (extra in rang or extra in fehlt):
                     t, n, _ = gut_text(extra)
                     p = 12 if n is None else max(8, 20 - (n - 1))
-                    gruende.append([p, f"schaltet Produktionsmethode {name} frei – stellt {gname(extra)} her, {t}"])
+                    gruende.append([p, ue(t"schaltet Produktionsmethode {name} frei – stellt {gname(extra)} her, {t}")])
                     punkte += p
                 elif feld == "unlock_unit" and fk in EINHEIT_PREFIX and isinstance(extra, str) \
                         and extra.startswith(EINHEIT_PREFIX[fk]):
-                    gruende.append([20, f"schaltet Einheit {name} frei ({extra})"])
+                    gruende.append([20, ue(t"schaltet Einheit {name} frei ({extra})")])
                     punkte += 20
                 elif regel and feld in regel[2]:
-                    gruende.append([8, f"schaltet {label} {name} frei – Thema {regel[0]}"])
+                    gruende.append([8, ue(t"schaltet {label} {name} frei – Thema {regel[0]}")])
                     punkte += 8
-            for m, mname, txt, ri in a["w"] + [[m, n2, "ja", 1] for m, n2 in a["s"]]:
+            for m, mname, txt, ri in a["w"] + [[m, n2, ue("ja"), 1] for m, n2 in a["s"]]:
                 if ri != 1:
                     continue                                      # nur Wirkungen in günstiger Richtung zählen
                 mo = re.match(r"^global_(\w+)_output_modifier$", m)
                 if mo and (mo.group(1) in rang or mo.group(1) in fehlt):
                     t, n, _ = gut_text(mo.group(1))
                     p = 12 if n is None else max(6, 15 - (n - 1))
-                    gruende.append([p, f"Wirkung {mname} {txt} – {t}"])
+                    gruende.append([p, ue(t"Wirkung {mname} {txt} – {t}")])
                     punkte += p
                 elif m in fmods:
-                    gruende.append([15, f"Wirkung {mname} {txt} – landesweit wie die Schwerpunkt-Wirkung "
-                                        f"„{(mt.get(fmods[m]) or {}).get('name') or fmods[m]}“ der Gebäude"])
+                    gruende.append([15, ue(t"Wirkung {mname} {txt} – landesweit wie die Schwerpunkt-Wirkung "
+                                        t"„{(mt.get(fmods[m]) or {}).get('name') or fmods[m]}“ der Gebäude")])
                     punkte += 15
                 elif muster and muster.match(m):
-                    gruende.append([10, f"Wirkung {mname} {txt} – Thema {regel[0]}"])
+                    gruende.append([10, ue(t"Wirkung {mname} {txt} – Thema {regel[0]}")])
                     punkte += 10
             gruende.sort(key=lambda g: -g[0])
             return punkte, gruende
 
         def zeile(k, punkte, gruende, w=None):
             c = kost.get(k)
-            e = {"key": k, "name": A[k]["n"], "punkte": punkte, "gruende": [f"{t} ({p} Punkte)" for p, t in gruende],
+            e = {"key": k, "name": A[k]["n"], "punkte": punkte, "gruende": [ue(t"{t} ({p} Punkte)") for p, t in gruende],
                  "kosten": c, "rc": A[k].get("rc"), "monate": round(c / je_monat, 1) if c and je_monat else None,
                  "thema": A[k].get("th"), "zeitalter": A[k].get("z"),
                  "laeuft": k == (st.get("laufend") or {}).get("key")}
@@ -996,11 +1007,11 @@ def vorschlaege(S, st, wp, gs=None, mt=None, wis_geb=None):
     return out
 
 
-REIHUNG = ("Reihung (Regel des Ratgebers): Summe der Punkte aller Gründe – " + "; ".join(PUNKTE.values())
-           + ". Bei Gleichstand zuerst die billigeren (Forschungskosten, wo belegt), dann niedrigere Stufe im Baum. Ziele: noch nicht "
-           f"erforschbar, höchstens {ZIEL_SCHRITTE} fehlende Voraussetzungen, alle für uns erforschbar; Wege mit gesperrtem Schritt "
-           "(Bedingung „allow“, z. B. Institution noch nicht eingeführt) hinten, sonst nach Punkten, dann kürzerem Weg. "
-           "Schwerpunkt-Güter, Gebäude mit Wirkung und Modifikatoren aus der Kachel Wirtschaftsplan.")
+REIHUNG = (ue("Reihung (Regel des Ratgebers): Summe der Punkte aller Gründe – ") + "; ".join(PUNKTE.values())
+           + ue(t". Bei Gleichstand zuerst die billigeren (Forschungskosten, wo belegt), dann niedrigere Stufe im Baum. Ziele: noch nicht "
+           t"erforschbar, höchstens {ZIEL_SCHRITTE} fehlende Voraussetzungen, alle für uns erforschbar; Wege mit gesperrtem Schritt "
+           t"(Bedingung „allow“, z. B. Institution noch nicht eingeführt) hinten, sonst nach Punkten, dann kürzerem Weg. "
+           t"Schwerpunkt-Güter, Gebäude mit Wirkung und Modifikatoren aus der Kachel Wirtschaftsplan."))
 
 
 def fuer_series(db, last, voll, names=None, wis=None, wp=None, gs=None, live_ok=True):

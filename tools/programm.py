@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from eu5ratgeber import pfade  # noqa: E402
 import ratgeber  # noqa: E402
 import waechter  # noqa: E402
+from eu5ratgeber.sprache import ue  # noqa: E402
 
 JA = 6
 
@@ -65,7 +66,7 @@ def autostart_einrichten():
         waechter.autostart(True)
         return True
     except (Exception, SystemExit) as e:                    # noqa: BLE001 – autostart meldet Fehler mit SystemExit
-        fenster(f"Der Autostart ließ sich nicht einrichten. Der Ratgeber läuft trotzdem, starte ihn dann von Hand.\n\n{e}")
+        fenster(ue(t"Der Autostart ließ sich nicht einrichten. Der Ratgeber läuft trotzdem, starte ihn dann von Hand.\n\n{e}"))
         return False
 
 
@@ -77,14 +78,14 @@ def erster_start():
         if e.get("autostart") and e.get("exe") != sys.executable:
             einstellungen_schreiben(autostart_einrichten())
         return
-    an = fenster("Soll der Ratgeber künftig von selbst starten, sobald du Europa Universalis V startest?\n\n"
-                 "Dafür läuft ab der Windows-Anmeldung ein kleiner Wächter im Hintergrund. Abschalten: siehe LIESMICH.txt.", frage=True)
+    an = fenster(ue("Soll der Ratgeber künftig von selbst starten, sobald du Europa Universalis V startest?\n\n"
+                 "Dafür läuft ab der Windows-Anmeldung ein kleiner Wächter im Hintergrund. Abschalten: siehe LIESMICH.txt."), frage=True)
     an = an and autostart_einrichten()
     einstellungen_schreiben(an)
     if an:
         subprocess.Popen([sys.executable, "waechter"], cwd=os.path.dirname(sys.executable), close_fds=True)
-    fenster("Beim ersten Start baut der Ratgeber sein Spielwissen aus den Spieldateien auf. Das dauert etwa eine halbe Minute, danach "
-            "öffnet sich die Seite im Browser.")
+    fenster(ue("Beim ersten Start baut der Ratgeber sein Spielwissen aus den Spieldateien auf. Das dauert etwa eine halbe Minute, danach "
+            "öffnet sich die Seite im Browser."))
 
 
 def main():
@@ -94,7 +95,7 @@ def main():
         waechter.main()
         return
     if not os.path.isdir(os.path.join(pfade.spiel(), "in_game")):
-        melden("Europa Universalis V wurde nicht gefunden. Der Ratgeber sucht in allen Steam-Bibliotheken dieses Benutzers.")
+        melden(ue("Europa Universalis V wurde nicht gefunden. Der Ratgeber sucht in allen Steam-Bibliotheken dieses Benutzers."))
         return
     if not args:
         erster_start()
@@ -108,5 +109,5 @@ if __name__ == "__main__":
     except ratgeber.PortBelegt as e:
         melden(str(e))
     except Exception:                                       # noqa: BLE001 – ohne Konsole sonst spurlos
-        melden(traceback.format_exc() + "\nDer Ratgeber wurde mit einem Fehler beendet. Einzelheiten: "
+        melden(traceback.format_exc() + ue("\nDer Ratgeber wurde mit einem Fehler beendet. Einzelheiten: ")
                + os.path.join(pfade.daten_ordner(), "ratgeber.log"))

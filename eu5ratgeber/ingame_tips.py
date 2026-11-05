@@ -10,6 +10,7 @@ Alle Funktionen liefern Rohtext mit dem Platzhalter FARBE statt „#“; der Auf
 """
 import re
 
+from . import sprache
 from .sprache import ue
 
 FARBE = "\x01"              # Platzhalter für „#“ der Farbcodes (#G … #!): übersteht ingame.loc, wird danach zu „#“
@@ -19,19 +20,23 @@ WARUM_ZEILEN = 14           # geschätzte Zeilen für „Warum“; was nicht pas
 TITEL_MAX = 120             # längere Titel: Kopf als Titel, die Aufzählung dahinter als Liste
 EINZUG = (3, 7)             # #indent_newline je Listenebene
 
-AUF, ZU = "([„", ")]“"
-ABKUERZUNG = re.compile(r"(?:\b(?:Nr|Min|max|ca|bzw|vgl|inkl|ggf|usw|etc)|\bz\. ?B|\bd\. ?h|\bu\. ?a)$")
+AUF, ZU, ANFUEHRUNG = ("([„", ")]“", "„") if sprache.DEUTSCH else ("([“", ")]”", "“")
+ABKUERZUNG = re.compile(r"(?:\b(?:Nr|Min|max|ca|bzw|vgl|inkl|ggf|usw|etc)|\bz\. ?B|\bd\. ?h|\bu\. ?a)$" if sprache.DEUTSCH
+                        else r"(?:\b(?:No|Min|max|approx|vs|etc)|\be\.g|\bi\.e)$")
 ETIKETTEN = ("Was tun", "Warum", "Wirkung", "Kosten", "Voraussetzung", "Bedingungen", "Neuer Rang", "Einzelheiten", "Weitere Werte")
 ETIKETT = re.compile("^(" + "|".join(re.escape(ue(x)) for x in ETIKETTEN) + r"):(?: |$)")
 # Quellen und Seiten-Hinweise: im Spiel ohne Nutzen, in fast jedem Satz (Spielstand: 12× in einem Tooltip)
-QUELLEN = ((re.compile(r"\s*\((?:Daten-Mod|Spielstand(?: [\d.]+)?|Spielmechanik|Spieldatei|Spielwert|Defines[^()]*|Test [\d./ ]+"
+# Die Wörter kommen aus dem Katalog: dieselben Muster greifen die englischen Texte
+_SPIELSTAND, _DATEN_MOD = ue("Spielstand"), ue("Daten-Mod")
+QUELLEN = ((re.compile(rf"\s*\((?:{_DATEN_MOD}|{_SPIELSTAND}(?: [\d.]+)?|{ue('Spielmechanik')}|{ue('Spieldatei')}|{ue('Spielwert')}|Defines[^()]*|Test [\d./ ]+"
                        r"|(?:Location|Country|Market)\.[^()]*)\)"), ""),
-           (re.compile(r"[;,]\s*(?:Spielstand(?: [\d.]+)?|Daten-Mod)(?=\))"), ""),
-           (re.compile(r"\(Spielstand [a-z_]+; "), "("),
-           (re.compile(r"\(Schätzung:[^()]*\)"), "(Schätzung)"),
-           (re.compile(r"\s*[–-]?\s*[Nn]ach dem (?:Umsetzen|Erforschen) markieren\.?"), ""),
-           (re.compile(r"Bedingung nicht prüfbar: [^;\n]*"), "Weitere Bedingungen nicht prüfbar"),    # sonst Schlüssel der Spieldatei
-           (re.compile(r" Nr\. \d{5,}"), ""))                     # Nummer einer Handelsbestellung: im Spiel nirgends zu sehen
+           (re.compile(rf"[;,]\s*(?:{_SPIELSTAND}(?: [\d.]+)?|{_DATEN_MOD})(?=\))"), ""),
+           (re.compile(rf"\({_SPIELSTAND}(?: [a-z_]+)?; "), "("),
+           (re.compile(rf"\({ue('Schätzung')}:[^()]*\)"), f"({ue('Schätzung')})"),
+           (re.compile(r"\s*[–-]?\s*[Nn]ach dem (?:Umsetzen|Erforschen) markieren\.?" if sprache.DEUTSCH
+                       else r"\s*[–-]?\s*[Mm]ark (?:it )?after (?:implementing|researching)\.?"), ""),
+           (re.compile(rf"{ue('Bedingung nicht prüfbar')}: [^;\n]*"), ue("Weitere Bedingungen nicht prüfbar")),    # sonst Schlüssel der Spieldatei
+           (re.compile(rf" {re.escape(ue('Nr.'))} \d{{5,}}"), ""))    # Nummer einer Handelsbestellung: im Spiel nirgends zu sehen
 
 
 def _f(code, text):
@@ -65,7 +70,7 @@ def trennen(s, zeichen):
         if tiefe or c != zeichen or s[i + 1:i + 2] != " ":
             continue
         danach = s[i + 2:i + 3]
-        if zeichen == "." and (ABKUERZUNG.search(s[start:i]) or not (danach.isupper() or danach == "„")):
+        if zeichen == "." and (ABKUERZUNG.search(s[start:i]) or not (danach.isupper() or danach == ANFUEHRUNG)):
             continue
         teile.append(s[start:i])
         start = i + 2

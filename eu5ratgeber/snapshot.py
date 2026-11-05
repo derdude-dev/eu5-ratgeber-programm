@@ -13,6 +13,7 @@ import re
 from collections import defaultdict
 
 from . import gruendung, pdx
+from .sprache import ue
 
 COUNTRY_LAST_MONTH = (
     "last_month_gold_income", "last_months_tax_income", "last_months_subject_tax",
@@ -43,7 +44,7 @@ def find_player_country(save, names, player=None):
         hits = {p["country"] for p in pcs if p.get("name") == player}
         if len(hits) == 1:
             return hits.pop()
-        raise ValueError(f"Spieler {player!r} nicht eindeutig gefunden: {hits}")
+        raise ValueError(ue(t"Spieler {player!r} nicht eindeutig gefunden: {hits}"))
     ids = {p["country"] for p in pcs}
     if len(ids) == 1:
         return ids.pop()
@@ -52,7 +53,7 @@ def find_player_country(save, names, player=None):
     hits = [i for i in ids if names(tags.get(i)) == want]
     if len(hits) == 1:
         return hits[0]
-    raise ValueError(f"Spieler-Land nicht eindeutig: Kandidaten {sorted(ids)} - Spielername angeben")
+    raise ValueError(ue(t"Spieler-Land nicht eindeutig: Kandidaten {sorted(ids)} - Spielername angeben"))
 
 
 def _num(v):
@@ -73,8 +74,8 @@ def mod_variables(country):
         if name.startswith("rg_") and isinstance(d, dict) and d.get("type") == "value":
             out[name] = d.get("identity", 0) / VAR_SCALE
     if out and out.get("rg_mod_version") != 1:
-        raise ValueError(f"Skalierung der Variablen stimmt nicht: rg_mod_version = {out.get('rg_mod_version')} "
-                         f"(erwartet 1 bei Faktor {VAR_SCALE})")
+        raise ValueError(ue(t"Skalierung der Variablen stimmt nicht: rg_mod_version = {out.get('rg_mod_version')} "
+                         t"(erwartet 1 bei Faktor {VAR_SCALE})"))
     return out
 
 
@@ -648,7 +649,7 @@ def kriege(save, names, tags, locnames, cid):
         schlachten = [_schlacht(b, names, tags, locnames) for b in (w.get("battle") or [])[-SCHLACHTEN_MAX:] if isinstance(b, dict)]
         oa, ziel = w.get("original_attacker"), w.get("original_attacker_target")
         out.append({
-            "id": wid, "name": f"{names(tags.get(oa)) if tags.get(oa) else oa} gegen {names(tags.get(ziel)) if tags.get(ziel) else ziel}",
+            "id": wid, "name": ue(t"{names(tags.get(oa)) if tags.get(oa) else oa} gegen {names(tags.get(ziel)) if tags.get(ziel) else ziel}"),
             "beginn": w.get("start_date"), "angreifer_ursprung": tags.get(oa), "ziel": tags.get(ziel),
             "verteidiger_ursprung": [tags.get(x) for x in _items(w.get("original_defenders"))],
             "kriegsziel": _kriegsziel(w, names, locnames), "angreifer_punkte": w.get("attacker_score"),
@@ -1027,7 +1028,7 @@ def _market_members(save, names, tags, locnames, members):
     for lid in members:
         L = save.entry("locations/locations", lid) or {}
         o = L.get("owner")
-        r = by.setdefault(o, {"land_id": o, "tag": tags.get(o), "land": names(tags.get(o)) if o is not None else "ohne Besitzer",
+        r = by.setdefault(o, {"land_id": o, "tag": tags.get(o), "land": names(tags.get(o)) if o is not None else ue("ohne Besitzer"),
                               "orte": 0, "entwicklung": 0.0, "steuer": 0.0, "rohstoffe": {}})
         r["orte"] += 1
         r["entwicklung"] += L.get("development") or 0

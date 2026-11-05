@@ -23,6 +23,7 @@ import os
 
 from . import gamedata
 from . import sprache
+from .sprache import ue
 
 KATEGORIE = {"trade_category": "Markt und Handel", "military_category": "Militär", "defense_category": "Militär",
              "naval_category": "Militär", "government_category": "Zivil", "infrastructure_category": "Zivil",
@@ -260,7 +261,7 @@ def plane(key, F, c):
         if not s.get("fortschritt"):
             return []
         z = s.get("fortschritt_zeitalter")
-        return [f"Fortschritt fehlt: {', '.join(s['fortschritt'])}" + (f" ({nm(z)})" if z else "")]
+        return [ue(t"Fortschritt fehlt: {', '.join(s['fortschritt'])}") + (f" ({nm(z)})" if z else "")]
 
     def verfuegbar(g):
         x = G.get(g) or {}
@@ -303,7 +304,7 @@ def plane(key, F, c):
     ziele += [r for r in F["fehlen"] if not r.get("nur_rohstoff")]
 
     def anteil_text(r):
-        return f"{_fmt(r['anteil'] * 100, 1)} % Anteil im Schwerpunkt" + (f", Preis {_fmt(G[r['gut']]['verh'])}× Grundpreis"
+        return ue(t"{_fmt(r['anteil'] * 100, 1)} % Anteil im Schwerpunkt") + (ue(t", Preis {_fmt(G[r['gut']]['verh'])}× Grundpreis")
                                                                          if G[r["gut"]].get("verh") else "")
 
     # ---- Gruppe 1: Ausbau mit Spielwerten (Rohstoff, eigene Gebäude mit laufender Methode für das Gut)
@@ -314,21 +315,21 @@ def plane(key, F, c):
                             key=lambda x: -x["steuer_je_stufe"])[:1]:
                 gruppen[1].append({
                     "wert": x["steuer_je_stufe"], "art": "rohstoff", "kategorie": "Produktion", "gut": g, "ort": x["ort"],
-                    "gebaeude": None, "was": f"Rohstoff {gname(g)} ausbauen", "warum": f"{gname(g)}: {anteil_text(r)}",
-                    "voraussetzung": "–", "wirkung": f"Steuergrundlage {_sgn(x['steuer_je_stufe'])} je Stufe (Spielwert, Mod)",
-                    "kosten": (f"{_fmt(x['kosten'], 1)} Gold" + (f", {x['tage']} Tage" if x.get("tage") else "")) if x.get("kosten") else "Baumenü",
+                    "gebaeude": None, "was": ue(t"Rohstoff {gname(g)} ausbauen"), "warum": f"{gname(g)}: {anteil_text(r)}",
+                    "voraussetzung": "–", "wirkung": ue(t"Steuergrundlage {_sgn(x['steuer_je_stufe'])} je Stufe (Spielwert, Mod)"),
+                    "kosten": (ue(t"{_fmt(x['kosten'], 1)} Gold") + (ue(t", {x['tage']} Tage") if x.get("tage") else "")) if x.get("kosten") else ue("Baumenü"),
                     "quelle": "Spielwert"})
         for e in c["eigene"]:
             if g in e.get("produziert", []) and e.get("ausbaufaehig") and (e["typ"], e["ort_id"]) not in belegt:
                 belegt.add((e["typ"], e["ort_id"]))
                 gruppen[1].append({
                     "wert": e["gewinn_je_stufe"] or 0, "art": "ausbau", "kategorie": "Produktion", "gut": g, "ort": e["ort"],
-                    "gebaeude": e["typ"], "was": f"{geb(e['typ'])['name']} ausbauen auf Stufe {e['stufe'] + 1:.0f}",
-                    "warum": f"stellt mit der laufenden Methode {gname(g)} her ({anteil_text(r)})", "voraussetzung": "–",
-                    "wirkung": f"Gewinn {_sgn(e['gewinn_je_stufe'] or 0, 3)} je Stufe"
-                               + (f", Steuergrundlage {_sgn(e['steuer_je_stufe'], 3)}" if e.get("steuer_je_stufe") is not None else "")
-                               + " (Spielwert, Mod: Durchschnitt je Stufe)",
-                    "kosten": "Baumenü", "quelle": "Spielwert"})
+                    "gebaeude": e["typ"], "was": ue(t"{geb(e['typ'])['name']} ausbauen auf Stufe {e['stufe'] + 1:.0f}"),
+                    "warum": ue(t"stellt mit der laufenden Methode {gname(g)} her ({anteil_text(r)})"), "voraussetzung": "–",
+                    "wirkung": ue(t"Gewinn {_sgn(e['gewinn_je_stufe'] or 0, 3)} je Stufe")
+                               + (ue(t", Steuergrundlage {_sgn(e['steuer_je_stufe'], 3)}") if e.get("steuer_je_stufe") is not None else "")
+                               + ue(" (Spielwert, Mod: Durchschnitt je Stufe)"),
+                    "kosten": ue("Baumenü"), "quelle": "Spielwert"})
                 break
     gruppen[1].sort(key=lambda s: -s["wert"])
 
@@ -350,17 +351,17 @@ def plane(key, F, c):
             gw = b.get("gewinn")
             return vor + [{
                 "art": "neubau", "kategorie": "Produktion", "gut": g, "ort": o["name"], "gebaeude": a,
-                "was": f"{b['name']} neu bauen" + (f" (Methode {(c['wis'].get('namen') or {}).get('pms', {}).get(pm['name']) or pm['name']})"
+                "was": ue(t"{b['name']} neu bauen") + (ue(t" (Methode {(c['wis'].get('namen') or {}).get('pms', {}).get(pm['name']) or pm['name']})")
                                                      if pm and len([p for p in b["pms"] if p["produziert"]]) > 1 else ""),
-                "warum": (f"{gname(g)} {'fehlt im Markt' if G[g].get('preis') is None else 'ist knapp' if (r or {}).get('knapp') else 'ist gefragt'}"
-                          + (f" ({anteil_text(r)})" if r else " – Eingangsgut für den nächsten Schritt")),
+                "warum": (f"{gname(g)} {ue('fehlt im Markt') if G[g].get('preis') is None else ue('ist knapp') if (r or {}).get('knapp') else ue('ist gefragt')}"
+                          + (f" ({anteil_text(r)})" if r else ue(" – Eingangsgut für den nächsten Schritt"))),
                 "voraussetzung": "; ".join(
-                    [f"Eingang {gname(i)} fehlt im Markt – Schritt davor" for i in fehlend]
-                    + [f"{nm(b['pop_typ']) if b.get('pop_typ') else 'Pops'} in {o['name']}: {_fmt(pops, 1)} Tsd."]
-                    + ([f"Bedingung nicht prüfbar: {', '.join(offen)}"] if offen else [])) or "–",
-                "wirkung": (f"Gewinn je Stufe {_fmt(gw['je_stufe'], 3)} ({gw['quelle']}, {gw['gebaeude']} Gebäude – Spielwert, Durchschnitt)"
-                            if gw else "Gewinn unbekannt (keine solchen Gebäude im Spielstand)"),
-                "kosten": f"Baumenü; Baugüter je Stufe: {baugueter_text(b)}", "quelle": "Spielwert" if gw else "unbekannt"}]
+                    [ue(t"Eingang {gname(i)} fehlt im Markt – Schritt davor") for i in fehlend]
+                    + [ue(t"{nm(b['pop_typ']) if b.get('pop_typ') else ue('Pops')} in {o['name']}: {_fmt(pops, 1)} Tsd.")]
+                    + ([ue(t"Bedingung nicht prüfbar: {', '.join(offen)}")] if offen else [])) or "–",
+                "wirkung": (ue(t"Gewinn je Stufe {_fmt(gw['je_stufe'], 3)} ({ue(gw['quelle'])}, {gw['gebaeude']} Gebäude – Spielwert, Durchschnitt)")
+                            if gw else ue("Gewinn unbekannt (keine solchen Gebäude im Spielstand)")),
+                "kosten": ue(t"Baumenü; Baugüter je Stufe: {baugueter_text(b)}"), "quelle": "Spielwert" if gw else "unbekannt"}]
         return []
 
     for r in ziele:
@@ -417,7 +418,7 @@ def plane(key, F, c):
         belegt.add((a, o["id"]))
         gewaehlt.add(a)
         festungen += fest
-        wtxt = [c["modtxt"](x, v) for x, v in m.items()] + [c["modtxt"](x, v) + " (in der Hauptstadt)" for x, v in h.items()]
+        wtxt = [c["modtxt"](x, v) for x, v in m.items()] + [c["modtxt"](x, v) + ue(" (in der Hauptstadt)") for x, v in h.items()]
         uk = c["unterhalt"](a)
         kat = KATEGORIE.get(d.get("category"), "Zivil")
         if kat != "Militär" and set(nutzen) & MARKT:
@@ -427,14 +428,14 @@ def plane(key, F, c):
         kat_spiel = c["nm"](d["category"]) if d.get("category") else None
         gruppen[3].append({
             "art": "wirkung", "kategorie": kat, "kategorie_spiel": kat_spiel, "gut": None, "ort": o["name"],
-            "gebaeude": a, "was": f"{b['name']} bauen",
-            "warum": f"{kat_spiel or 'Gebäude'} mit Wirkung auf den Schwerpunkt"
-                     + (f" – bei uns schon ×{s['bei_uns']} an anderem Ort" if s.get("bei_uns") else ""),
-            "voraussetzung": "; ".join(fehlt_text(a) + ([f"Bedingung nicht prüfbar: {', '.join(offen)}"] if offen else [])
-                                       + ([f"Festungsgrenze: {_fmt(land['used_fort_limit'], 1)} von {_fmt(land['GetFortLimit'], 2)} belegt"]
+            "gebaeude": a, "was": ue(t"{b['name']} bauen"),
+            "warum": ue(t"{kat_spiel or ue('Gebäude')} mit Wirkung auf den Schwerpunkt")
+                     + (ue(t" – bei uns schon ×{s['bei_uns']} an anderem Ort") if s.get("bei_uns") else ""),
+            "voraussetzung": "; ".join(fehlt_text(a) + ([ue(t"Bedingung nicht prüfbar: {', '.join(offen)}")] if offen else [])
+                                       + ([ue(t"Festungsgrenze: {_fmt(land['used_fort_limit'], 1)} von {_fmt(land['GetFortLimit'], 2)} belegt")]
                                           if fest and festung_frei is not None else [])) or "–",
-            "wirkung": ", ".join(wtxt) + " je Stufe (Spieldatei)",
-            "kosten": f"Baumenü; Baugüter je Stufe: {baugueter_text(b)}" + (f"; Unterhalt {uk}" if uk else ""),
+            "wirkung": ", ".join(wtxt) + ue(" je Stufe (Spieldatei)"),
+            "kosten": ue(t"Baumenü; Baugüter je Stufe: {baugueter_text(b)}") + (ue(t"; Unterhalt {uk}") if uk else ""),
             "quelle": "Spieldatei"})
 
     # ---- Gruppe 4: Straßen zur Hauptstadt
@@ -443,18 +444,18 @@ def plane(key, F, c):
     if key in STRASSE_FOKUS and hs and rt:
         preis = ((c["preise"].get(rt.get("price_per_unit_distance")) or {}).get("def") or {}).get("gold")
         bg = ", ".join(f"{gname(g)} {_fmt(v)}" for g, v in c["mengen"](rt.get("construction_demand")).items()) or "–"
-        name = (c["rt"].get("gravel_road") or {}).get("name") or "Schotterstraße"
+        name = (c["rt"].get("gravel_road") or {}).get("name") or ue("Schotterstraße")
         felder = ", ".join(f"{k} {_sgn(v)}" for k, v in rt.items() if k in ("movement_cost", "market_access", "pop_movement", "proximity"))
         ohne = sorted((o for o in orte if not o["strasse_zur_hauptstadt"] and not o["hauptstadt"]), key=lambda o: -(o["steuer"] or 0))
         for o in ohne[:PLAETZE[4]]:
             gruppen[4].append({
                 "art": "strasse", "kategorie": "Straße", "gut": None, "ort": o["name"], "gebaeude": None,
                 "was": f"{name} {hs['name']} → {o['name']}",
-                "warum": f"{o['name']} hat keine Straße zur Hauptstadt (Spielstand road_to_capital; Nähe {_fmt(o['naehe'] or 0, 0)}, "
-                         f"Steuer {_fmt(o['steuer'] or 0)})",
-                "voraussetzung": "Weg über Nachbarorte nicht geprüft",
-                "wirkung": f"Spieldatei road_types ({name}): {felder} – Bedeutung der Felder nicht am Spiel geprüft",
-                "kosten": (f"{_fmt(preis, 0)} Gold je Entfernungseinheit" if preis else "Straßenbau im Spiel") + f"; Baugüter: {bg}",
+                "warum": ue(t"{o['name']} hat keine Straße zur Hauptstadt (Spielstand road_to_capital; Nähe {_fmt(o['naehe'] or 0, 0)}, "
+                         t"Steuer {_fmt(o['steuer'] or 0)})"),
+                "voraussetzung": ue("Weg über Nachbarorte nicht geprüft"),
+                "wirkung": ue(t"Spieldatei road_types ({name}): {felder} – Bedeutung der Felder nicht am Spiel geprüft"),
+                "kosten": (ue(t"{_fmt(preis, 0)} Gold je Entfernungseinheit") if preis else ue("Straßenbau im Spiel")) + ue(t"; Baugüter: {bg}"),
                 "quelle": "Spieldatei"})
 
     schritte = []

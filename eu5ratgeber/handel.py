@@ -30,14 +30,18 @@ import json
 import re
 
 from . import sprache
+from .sprache import ue
 
-HERKUNFT = {"automatik": "Automatisierung", "bestellung": "Handelsbestellung", "geschuetzt": "geschützt (Vereinbarung)"}
+HERKUNFT = {"automatik": ue("Automatisierung"), "bestellung": ue("Handelsbestellung"), "geschuetzt": ue("geschützt (Vereinbarung)")}
 # Spieltexte (deutsch) TRADE_IMPORT/EXPORT_TARIFF_TT und TRADE_IMPORT/EXPORT_SUBSIDY_TT (trade_orders_l_german.yml), nach
 # livelog.decode_text: „Bulgarien verlangt einen 20% Zoll auf Ausfuhren von: Schmuck (0.98).“
-_ZOLL = re.compile(r"(?P<land>[^\n]+?) verlangt einen (?P<satz>-?\d+)% Zoll auf (?P<richtung>Einfuhren|Ausfuhren) von: "
-                   r"(?P<gut>[^\n(]+?) \((?P<wert>-?[\d.,]+)\)")
-_SUBV = re.compile(r"(?P<land>[^\n]+?) zahlt eine (?P<satz>-?\d+)% Subvention für (?P<richtung>Einfuhren|Ausfuhren) von:? "
-                   r"(?P<gut>[^\n(:]+?):? \((?P<wert>-?[\d.,]+)\)")
+_ZOLL = (re.compile(r"(?P<land>[^\n]+?) verlangt einen (?P<satz>-?\d+)% Zoll auf (?P<richtung>Einfuhren|Ausfuhren) von: "
+                    r"(?P<gut>[^\n(]+?) \((?P<wert>-?[\d.,]+)\)"),
+         # Englisch dieselben Schlüssel: „Bulgaria charges a 20% Tariff on Jewelry Exports (0.98).“
+         re.compile(r"(?P<land>[^\n]+?) charges a (?P<satz>-?\d+)% Tariff on (?P<gut>[^\n(]+?) (?P<richtung>Imports|Exports) \((?P<wert>-?[\d.,]+)\)"))
+_SUBV = (re.compile(r"(?P<land>[^\n]+?) zahlt eine (?P<satz>-?\d+)% Subvention für (?P<richtung>Einfuhren|Ausfuhren) von:? "
+                    r"(?P<gut>[^\n(:]+?):? \((?P<wert>[-+]?[\d.,]+)\)"),      # $VAL|+2$: das Spiel schreibt das Plus mit
+         re.compile(r"(?P<land>[^\n]+?) provides a (?P<satz>-?\d+)% Subvention on (?P<gut>[^\n(]+?) (?P<richtung>Imports|Exports) \((?P<wert>[-+]?[\d.,]+)\)"))
 
 
 def _num(v):
@@ -52,11 +56,12 @@ def zolltexte(text):
     """Trade.GetTariffInfo -> [{land, art (zoll|subvention), richtung (einfuhr|ausfuhr), satz (0,2 = 20 %), gut, wert}];
     wert = Gold je Monat wie im Text (ohne Vorzeichen, 2 Stellen)."""
     out = []
-    for art, rx in (("zoll", _ZOLL), ("subvention", _SUBV)):
-        for m in rx.finditer(text or ""):
-            out.append({"land": m.group("land").strip(), "art": art,
-                        "richtung": "einfuhr" if m.group("richtung") == "Einfuhren" else "ausfuhr",
-                        "satz": int(m.group("satz")) / 100, "gut": m.group("gut").strip(), "wert": _zahl(m.group("wert"))})
+    for art, muster in (("zoll", _ZOLL), ("subvention", _SUBV)):
+        for rx in muster:
+            for m in rx.finditer(text or ""):
+                out.append({"land": m.group("land").strip(), "art": art,
+                            "richtung": "einfuhr" if m.group("richtung") in ("Einfuhren", "Imports") else "ausfuhr",
+                            "satz": int(m.group("satz")) / 100, "gut": m.group("gut").strip(), "wert": _zahl(m.group("wert"))})
     return out
 
 
@@ -100,7 +105,7 @@ def quellen_liste(quellen, names, mod):
     def teil(p):
         if "/" in p:
             return nm(p.split("/")[0])
-        return {"left_modifier": "linker Pol", "right_modifier": "rechter Pol"}.get(p, "")
+        return {"left_modifier": ue("linker Pol"), "right_modifier": ue("rechter Pol")}.get(p, "")
     return [{"ordner": o, "name": nm(d) or d, "teil": teil(p or ""), "wert": w} for o, d, p, w in (quellen or {}).get(mod) or []
             if _num(w)]
 
@@ -158,7 +163,7 @@ def build(db, last, names=None, defines=None, quellen=None, wp=None):
             continue
         if x["texte"]:
             for e in x["texte"]:
-                g = je_land.setdefault(e["land"], {"land": e["land"], "quelle": "Spieltext", "routen": set(), "betrag": 0.0,
+                g = je_land.setdefault(e["land"], {"land": e["land"], "quelle": ue("Spieltext"), "routen": set(), "betrag": 0.0,
                                                    "eintraege": []})
                 g["routen"].add(x["id"])
                 g["betrag"] += (x["zoll"] if len(x["texte"]) == 1
@@ -166,8 +171,8 @@ def build(db, last, names=None, defines=None, quellen=None, wp=None):
                 g["eintraege"].append({k: e[k] for k in ("art", "richtung", "satz", "gut")})
         else:
             t = x["besitzer_von"] if x["export"] else x["besitzer_nach"]
-            name = nm(t) if t else "unbekannt"
-            g = je_land.setdefault(name, {"land": name, "quelle": "Marktbesitzer (Spielstand)", "routen": set(), "betrag": 0.0,
+            name = nm(t) if t else ue("unbekannt")
+            g = je_land.setdefault(name, {"land": name, "quelle": ue("Marktbesitzer (Spielstand)"), "routen": set(), "betrag": 0.0,
                                           "eintraege": []})
             g["routen"].add(x["id"])
             g["betrag"] += x["zoll"]
@@ -282,22 +287,22 @@ def build(db, last, names=None, defines=None, quellen=None, wp=None):
 # Spielstand 1.4.5: Felder trade_order_mode, trade_order_import/export_markets, …_market_groups kennt das Spielprogramm (eu5.exe),
 # die Bestellung des Nutzers (1338.4.7) hat keins davon -> Standardwerte, welche, ist nicht belegt.
 MODI = {
-    "profit": ("Gewinnschwerpunkt", "TRADE_ORDER_MODE_PROFIT",
-               "nutzt die Händlerkapazität für die lohnenswertesten Handel bei den gewählten Waren und Märkten"),
-    "food": ("Nahrungsschwerpunkt", "TRADE_ORDER_MODE_FOOD",
-             "bringt möglichst viel Nahrung auf einen Markt, der ohne die Bestellung Nahrung verlieren würde und unter {food} "
-             "Nahrungsbestand hat (Define TRADE_ORDER_FOOD_MAINTAIN_STOCKPILE_FRACTION)"),
-    "needs": ("Knappheitsschwerpunkt", "TRADE_ORDER_MODE_NEEDS",
-              "deckt Knappheiten des Zielmarkts, ein Eintrag nach dem anderen – nur Waren, die der Markt stärker verbraucht als er "
+    "profit": (ue("Gewinnschwerpunkt"), "TRADE_ORDER_MODE_PROFIT",
+               ue("nutzt die Händlerkapazität für die lohnenswertesten Handel bei den gewählten Waren und Märkten")),
+    "food": (ue("Nahrungsschwerpunkt"), "TRADE_ORDER_MODE_FOOD",
+             ue("bringt möglichst viel Nahrung auf einen Markt, der ohne die Bestellung Nahrung verlieren würde und unter {food} "
+             "Nahrungsbestand hat (Define TRADE_ORDER_FOOD_MAINTAIN_STOCKPILE_FRACTION)")),
+    "needs": (ue("Knappheitsschwerpunkt"), "TRADE_ORDER_MODE_NEEDS",
+              ue("deckt Knappheiten des Zielmarkts, ein Eintrag nach dem anderen – nur Waren, die der Markt stärker verbraucht als er "
               "herstellt und deren Vorrat unter {needs} des Höchstvorrats liegt (Define "
-              "TRADE_ORDER_NEEDS_STOCKPILE_EXCLUSION_FRACTION; den Höchstvorrat je Ware hat der Spielstand nicht)"),
+              "TRADE_ORDER_NEEDS_STOCKPILE_EXCLUSION_FRACTION; den Höchstvorrat je Ware hat der Spielstand nicht)")),
 }
 EINTRAEGE = {
-    "any_food": ("Beliebige Nahrung", "TRADE_ORDER_ANY_FOOD", "alle Waren, die Nahrung ergeben"),
-    "any_pop_need": ("Beliebige Pop-Bedarfe", "TRADE_ORDER_ANY_POP_NEED",
-                     "jede Ware, die unsere Pops auf diesem Markt derzeit brauchen; monatlich neu bewertet"),
-    "any_government_need": ("Beliebige Regierungsbedarfe", "TRADE_ORDER_ANY_GOVERNMENT_NEED",
-                            "jede Ware, die die Regierung auf diesem Markt derzeit braucht; monatlich neu bewertet"),
+    "any_food": (ue("Beliebige Nahrung"), "TRADE_ORDER_ANY_FOOD", ue("alle Waren, die Nahrung ergeben")),
+    "any_pop_need": (ue("Beliebige Pop-Bedarfe"), "TRADE_ORDER_ANY_POP_NEED",
+                     ue("jede Ware, die unsere Pops auf diesem Markt derzeit brauchen; monatlich neu bewertet")),
+    "any_government_need": (ue("Beliebige Regierungsbedarfe"), "TRADE_ORDER_ANY_GOVERNMENT_NEED",
+                            ue("jede Ware, die die Regierung auf diesem Markt derzeit braucht; monatlich neu bewertet")),
 }
 # Schwerpunkt -> (Richtung, Modus, Eintrag „Beliebige …“ oder None). Regel des Ratgebers: Einfuhr knapper Güter des Schwerpunkts
 # (Knappheitsschwerpunkt), Ausfuhr von Überschüssen bei Export und Gewinn (Gewinnschwerpunkt), Veredelung: Einfuhr der
@@ -537,41 +542,41 @@ def _befund(e, mname, mindest, datum, nm):
     ein = e["richtung"] == "einfuhr"
     if e["routen"]:
         r = e["routen"][0]
-        out.append(f"Route live {'aus' if ein else 'nach'} {r['markt']}: Gewinn je Händlerkapazität "
-                   f"{_de(e['je_kap']) if _num(e['je_kap']) else '–'} (Daten-Mod).")
+        out.append(ue(t"Route live {ue('aus') if ein else ue('nach')} {r['markt']}: Gewinn je Händlerkapazität "
+                   t"{_de(e['je_kap']) if _num(e['je_kap']) else '–'} (Daten-Mod)."))
     elif e["nie"]:
-        out.append(f"In keinem der {e['monate']} Monate mit Daten-Mod ({e['von']}–{e['bis']}) eine Route dieser Bestellung.")
+        out.append(ue(t"In keinem der {e['monate']} Monate mit Daten-Mod ({e['von']}–{e['bis']}) eine Route dieser Bestellung."))
     elif e["letzte"]:
         L = e["letzte"]
         werte = [(m, v) for m, v, gen in L["serie"] if _num(v) and gen != 0]
         leer = [m for m, v, gen in L["serie"] if gen == 0]
-        t = f"Letzte Route im {L['monat']} {'aus' if ein else 'nach'} {L['markt']}"
+        t = ue(t"Letzte Route im {L['monat']} {ue('aus') if ein else ue('nach')} {L['markt']}")
         if werte:
-            t += ", Gewinn je Händlerkapazität " + " → ".join(f"{_de(v)} ({m})" for m, v in werte)
+            t += ue(", Gewinn je Händlerkapazität ") + " → ".join(f"{_de(v)} ({m})" for m, v in werte)
         if leer:
-            t += f"; im {', '.join(leer)} nichts gehandelt (genutzte Kapazität 0)"
+            t += ue(t"; im {', '.join(leer)} nichts gehandelt (genutzte Kapazität 0)")
         if _num(mindest) and werte and werte[-1][1] < mindest:
-            t += f" – zuletzt unter dem Mindestgewinn {_de(mindest)} der Bestellung"
-        out.append(t + f"; seit {e['ohne_seit']} Monat(en) keine Route (Daten-Mod).")
+            t += ue(t" – zuletzt unter dem Mindestgewinn {_de(mindest)} der Bestellung")
+        out.append(t + ue(t"; seit {e['ohne_seit']} Monat(en) keine Route (Daten-Mod)."))
     lg = e["lage"]
     if lg and _num(lg.get("angebot")) and _num(lg.get("nachfrage")):
         a, n = lg["angebot"], lg["nachfrage"]
         if ein:
-            out.append(f"{mname}: Angebot {_de(a)} ≥ Nachfrage {_de(n)} – kein Bedarf (Spielstand {datum})." if a >= n
-                       else f"{mname}: Nachfrage {_de(n)} > Angebot {_de(a)} (Spielstand {datum}).")
+            out.append(ue(t"{mname}: Angebot {_de(a)} ≥ Nachfrage {_de(n)} – kein Bedarf (Spielstand {datum}).") if a >= n
+                       else ue(t"{mname}: Nachfrage {_de(n)} > Angebot {_de(a)} (Spielstand {datum})."))
         else:
-            out.append(f"{mname}: Nachfrage {_de(n)} > Angebot {_de(a)} – eine Ausfuhr verschärft die Knappheit (Spielstand {datum})."
-                       if n > a else f"{mname}: Überschuss {_de(a - n)} (Angebot {_de(a)}, Nachfrage {_de(n)}; Spielstand {datum}).")
+            out.append(ue(t"{mname}: Nachfrage {_de(n)} > Angebot {_de(a)} – eine Ausfuhr verschärft die Knappheit (Spielstand {datum}).")
+                       if n > a else ue(t"{mname}: Überschuss {_de(a - n)} (Angebot {_de(a)}, Nachfrage {_de(n)}; Spielstand {datum})."))
     if lg and _num(lg.get("preis")):
         liste = e["billiger"] if ein else e["teurer"]
         if liste:
-            out.append(f"{'Billiger' if ein else 'Teurer'} in Märkten in Reichweite: "
-                       + ", ".join(f"{x['markt']} {_de(x['preis'])}" for x in liste) + f" (hier {_de(lg['preis'])}; Spielstand).")
+            out.append(ue(t"{ue('Billiger') if ein else ue('Teurer')} in Märkten in Reichweite: ")
+                       + ", ".join(f"{x['markt']} {_de(x['preis'])}" for x in liste) + ue(t" (hier {_de(lg['preis'])}; Spielstand)."))
         else:
-            out.append(f"Kein Markt in Reichweite {'billiger mit Angebot' if ein else 'teurer mit Nachfrage'} "
-                       f"(hier {_de(lg['preis'])}; Spielstand) – weitere Märkte erreicht das Spiel trotzdem.")
+            out.append(ue(t"Kein Markt in Reichweite {ue('billiger mit Angebot') if ein else ue('teurer mit Nachfrage')} "
+                       t"(hier {_de(lg['preis'])}; Spielstand) – weitere Märkte erreicht das Spiel trotzdem."))
     if not ein and _num(e.get("zoll_satz")) and e["zoll_satz"] > 0:
-        out.append(f"Ausfuhrzoll {nm(e['zoll_land'])} auf {e['gut_name']}: {_de(e['zoll_satz'] * 100, 1)} % (Spielstand).")
+        out.append(ue(t"Ausfuhrzoll {nm(e['zoll_land'])} auf {e['gut_name']}: {_de(e['zoll_satz'] * 100, 1)} % (Spielstand)."))
     return out
 
 
@@ -621,28 +626,28 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
     min_profit = min_netto + (df.get("DEFAULT_TRADE_ORDER_MIN_PROFIT") or 0.25)
 
     def schwelle_txt(s):
-        return (f"unter Mindestgewinn {_de(s - min_netto)} + Händlerunterhalt {_de(min_netto)} je Kapazität (bei mindestens 1 "
-                "Kapazität je Einheit)" if s > min_netto else f"unter dem Händlerunterhalt {_de(min_netto)} je Kapazität")
+        return (ue(t"unter Mindestgewinn {_de(s - min_netto)} + Händlerunterhalt {_de(min_netto)} je Kapazität (bei mindestens 1 "
+                t"Kapazität je Einheit)") if s > min_netto else ue(t"unter dem Händlerunterhalt {_de(min_netto)} je Kapazität"))
     if not kap:
-        hinweise.append(f"Wir haben keine Händlerkapazität im Markt {hname} – das Spiel kann einer Bestellung dort nichts zuordnen "
-                        "(Spieltext TRADE_ORDER_NO_TC_IN_MARKET_TT).")
+        hinweise.append(ue(t"Wir haben keine Händlerkapazität im Markt {hname} – das Spiel kann einer Bestellung dort nichts zuordnen "
+                        t"(Spieltext TRADE_ORDER_NO_TC_IN_MARKET_TT)."))
     elif (kap["frei"] or 0) < min_tc:
-        teile = [f"Bestellung Nr. {p['id']} {_de(p['bestellung']['kapazitaet'])}" for p in pr.values()
+        teile = [ue(t"Bestellung Nr. {p['id']} {_de(p['bestellung']['kapazitaet'])}") for p in pr.values()
                  if str(p.get("markt")) == hid and _num(p["bestellung"].get("kapazitaet"))]
-        hinweise.append(f"Unsere Händlerkapazität in {hname} ist voll genutzt: {_de(kap['genutzt'])} von {_de(kap['kapazitaet'])} "
-                        f"(Spielstand{'; davon ' + ', '.join(teile) if teile else ''}). Eine neue Bestellung bekommt Kapazität nach "
-                        "Priorität – früher gelistete zuerst (Spieltext TRADE_ORDER_PRIORITY_INFO): vor die bestehende setzen oder "
-                        "deren Kapazität senken.")
-    hinweise.append("Gewinn je Händlerkapazität einer neuen Route rechnet der Ratgeber nicht vor: die Kapazität je Einheit hängt von "
-                    "Entfernung und Gut ab. Das Spiel zeigt ihn in der Bestellung (beste Route mit Gewinn je Händlerkapazität).")
+        hinweise.append(ue(t"Unsere Händlerkapazität in {hname} ist voll genutzt: {_de(kap['genutzt'])} von {_de(kap['kapazitaet'])} "
+                        t"(Spielstand{ue('; davon ') + ', '.join(teile) if teile else ''}). Eine neue Bestellung bekommt Kapazität nach "
+                        t"Priorität – früher gelistete zuerst (Spieltext TRADE_ORDER_PRIORITY_INFO): vor die bestehende setzen oder "
+                        t"deren Kapazität senken."))
+    hinweise.append(ue("Gewinn je Händlerkapazität einer neuen Route rechnet der Ratgeber nicht vor: die Kapazität je Einheit hängt von "
+                    "Entfernung und Gut ab. Das Spiel zeigt ihn in der Bestellung (beste Route mit Gewinn je Händlerkapazität)."))
     # Märkte ohne Preisdaten (nicht in Reichweite laut Daten-Mod) erreicht das Spiel trotzdem – Beleg aus unseren Routen
     aussen = sorted({f"{x.get('gut_name') or x.get('gut')} → {x.get('nach_name') or x.get('nach')}" for x in hz.get("routen") or []
                      if str(x.get("von")) == hid and x.get("nach") is not None and str(x.get("nach")) not in views}
-                    | {f"{x.get('gut_name') or x.get('gut')} aus {x.get('von_name') or x.get('von')}" for x in hz.get("routen") or []
+                    | {ue(t"{x.get('gut_name') or x.get('gut')} aus {x.get('von_name') or x.get('von')}") for x in hz.get("routen") or []
                        if str(x.get("nach")) == hid and x.get("von") is not None and str(x.get("von")) not in views})
     if aussen:
-        hinweise.append("Verglichen werden nur Märkte mit Preisen im Spielstand (Märkte in Reichweite laut Daten-Mod); das Spiel "
-                        "handelt auch mit anderen – unsere Route(n) " + ", ".join(aussen) + " (Daten-Mod).")
+        hinweise.append(ue("Verglichen werden nur Märkte mit Preisen im Spielstand (Märkte in Reichweite laut Daten-Mod); das Spiel "
+                        "handelt auch mit anderen – unsere Route(n) ") + ", ".join(aussen) + ue(" (Daten-Mod)."))
 
     def zeile(gut, richtung, anteil, k, m, y, p, a, n, land, satz, netto, weitere, fuer=None):
         dort = y["preis"]
@@ -664,14 +669,14 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
         nach dem Ausfuhrzoll ihres Besitzers (Satz × Einkaufswert, nachgerechnet 29.10.) – Märkte mit Überschuss zuerst."""
         x, p = preis_hier(gut)
         if not p:
-            return None, "kein Preis im Heimatmarkt"
+            return None, ue("kein Preis im Heimatmarkt")
         a, n = x.get("angebot") or 0, x.get("nachfrage") or 0
         if a >= n:
-            return None, "ausreichend (Angebot ≥ Nachfrage)"
+            return None, ue("ausreichend (Angebot ≥ Nachfrage)")
         if n - a < min_menge:
-            return None, f"Fehlmenge {_de(n - a)} unter {_de(min_menge, 1)}"
+            return None, ue(t"Fehlmenge {_de(n - a)} unter {_de(min_menge, 1)}")
         if not n > a * KNAPP_FAKTOR:
-            return None, "kaum knapp (Nachfrage unter Angebot × 1,05)"
+            return None, ue("kaum knapp (Nachfrage unter Angebot × 1,05)")
         q = []
         for k, m in views.items():
             y = _gut(m, gut)
@@ -681,12 +686,12 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
             netto = p - y["preis"] - (satz or 0) * y["preis"]
             q.append((k, m, y, land, satz, netto))
         if not q:
-            return None, "kein Markt in Reichweite mit Angebot billiger"
+            return None, ue("kein Markt in Reichweite mit Angebot billiger")
         pos = sorted((t for t in q if t[5] >= schwelle),
                      key=lambda t: ((t[2].get("angebot") or 0) <= (t[2].get("nachfrage") or 0), -t[5]))
         if not pos:
             best = max(q, key=lambda t: t[5])
-            return None, (f"Vorteil nach Zoll höchstens {_de(best[5])} ({best[1].get('zentrum') or best[0]}) – "
+            return None, (ue(t"Vorteil nach Zoll höchstens {_de(best[5])} ({best[1].get('zentrum') or best[0]}) – ")
                           + schwelle_txt(schwelle))
         k, m, y, land, satz, netto = pos[0]
         return zeile(gut, "einfuhr", anteil, k, m, y, p, a, n, land, satz, netto, len(pos) - 1, fuer), None
@@ -696,20 +701,20 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
         nach dem Ausfuhrzoll des Besitzers unseres Markts (Satz × Einkaufswert)."""
         x, p = preis_hier(gut)
         if not p:
-            return None, "kein Preis im Heimatmarkt"
+            return None, ue("kein Preis im Heimatmarkt")
         a, n = x.get("angebot") or 0, x.get("nachfrage") or 0
         if not (a > n * KNAPP_FAKTOR and a - n >= min_menge):
-            return None, "kein Überschuss (Angebot ≤ Nachfrage × 1,05 oder unter " + _de(min_menge, 1) + ")"
+            return None, ue("kein Überschuss (Angebot ≤ Nachfrage × 1,05 oder unter ") + _de(min_menge, 1) + ")"
         z = [(k, m, y) for k, m in views.items() if k != hid and (y := _gut(m, gut)) and _num(y.get("preis")) and y["preis"] > p
              and (y.get("nachfrage") or 0) > 0]
         if not z:
-            return None, "kein Markt in Reichweite mit Nachfrage teurer"
+            return None, ue("kein Markt in Reichweite mit Nachfrage teurer")
         k, m, y = max(z, key=lambda t: t[2]["preis"])
         land, satz = _tarif(last, hid, gut)
         netto = y["preis"] - p - (satz or 0) * p
         if netto < schwelle:
-            return None, (f"Vorteil nach Zoll {_de(netto)} ({m.get('zentrum') or k} {_de(y['preis'])}, hier {_de(p)}"
-                          + (f", Ausfuhrzoll {nm(land)} {_de(satz * 100, 0)} %" if satz else "")
+            return None, (ue(t"Vorteil nach Zoll {_de(netto)} ({m.get('zentrum') or k} {_de(y['preis'])}, hier {_de(p)}")
+                          + (ue(t", Ausfuhrzoll {nm(land)} {_de(satz * 100, 0)} %") if satz else "")
                           + ") – " + schwelle_txt(schwelle))
         return zeile(gut, "ausfuhr", anteil, k, m, y, p, a, n, land, satz, netto, len(z) - 1), None
 
@@ -728,11 +733,11 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
         richtung, modus, eintrag = VORLAGEN.get(fk, ("einfuhr", "needs", None))
         fh = []
         if modus == "food" and food_aus:
-            grund = (f"Nahrungsbestand {_de(voll * 100, 0)} % (ab {_de(food_frac * 100, 0)} % gilt ein Markt als versorgt, Define "
-                     "TRADE_ORDER_FOOD_MAINTAIN_STOCKPILE_FRACTION)" if voll >= food_frac else
-                     f"der Markt verliert keine Nahrung ({'+' if bilanz > 0 else ''}{_de(bilanz, 1)} je Monat, Daten-Mod)")
-            fh.append(f"Der Nahrungsschwerpunkt liefert derzeit nichts nach {hname}: {grund}. Für einzelne knappe Nahrungsgüter den "
-                      "Knappheitsschwerpunkt nehmen.")
+            grund = (ue(t"Nahrungsbestand {_de(voll * 100, 0)} % (ab {_de(food_frac * 100, 0)} % gilt ein Markt als versorgt, Define "
+                     t"TRADE_ORDER_FOOD_MAINTAIN_STOCKPILE_FRACTION)") if voll >= food_frac else
+                     ue(t"der Markt verliert keine Nahrung ({'+' if bilanz > 0 else ''}{_de(bilanz, 1)} je Monat, Daten-Mod)"))
+            fh.append(ue(t"Der Nahrungsschwerpunkt liefert derzeit nichts nach {hname}: {grund}. Für einzelne knappe Nahrungsgüter den "
+                      t"Knappheitsschwerpunkt nehmen."))
             modus = "needs"
         rows, aus = [], []
         schwelle = min_profit if modus == "profit" else min_netto
@@ -759,7 +764,7 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
             if not e:
                 gg = [(bid, rr) for bid, rr in bestand.get(gut, []) if rr != richtung]
                 aus.append({"gut": gut, "gut_name": (G.get(gut) or {}).get("name") or nm(gut),
-                            "grund": grund + (f"; Bestellung Nr. {gg[0][0]} führt es {'aus' if gg[0][1] == 'ausfuhr' else 'ein'}"
+                            "grund": grund + ((ue(t"; Bestellung Nr. {gg[0][0]} führt es aus") if gg[0][1] == "ausfuhr" else ue(t"; Bestellung Nr. {gg[0][0]} führt es ein"))
                                               if gg else "")})
                 continue
             gleich = [bid for bid, rr in bestand.get(gut, []) if rr == richtung]
@@ -770,15 +775,15 @@ def vorschlaege(hz, wp, last, nm, markt_mod=None):
                 e["bestellung"] = {"art": "gegen", "id": gegen[0][0], "richtung": gegen[0][1], "route": route_da(gegen[0][0], gut)}
             rows.append(e)
         mtxt = MODI[modus]
-        if fk == "import" and any(x["grund"] == "ausreichend (Angebot ≥ Nachfrage)" for x in aus):
-            fh.append("Eingangsgüter, von denen der Heimatmarkt genug hat, erst einführen, wenn der Veredelungsbetrieb steht – vorher "
-                      "gibt es keinen Bedarf.")
+        if fk == "import" and any(x["grund"] == ue("ausreichend (Angebot ≥ Nachfrage)") for x in aus):
+            fh.append(ue("Eingangsgüter, von denen der Heimatmarkt genug hat, erst einführen, wenn der Veredelungsbetrieb steht – vorher "
+                      "gibt es keinen Bedarf."))
         out["fokusse"][fk] = {
             "name": F.get("name"), "richtung": richtung,
-            "bestellart": "Einfuhrbestellung" if richtung == "einfuhr" else "Ausfuhrbestellung",
+            "bestellart": ue("Einfuhrbestellung") if richtung == "einfuhr" else ue("Ausfuhrbestellung"),
             "modus": {"key": modus, "name": mtxt[0], "loc": mtxt[1],
-                      "text": mtxt[2].format(food=_de(food_frac * 100, 0) + " %",
-                                             needs=_de(df.get("TRADE_ORDER_NEEDS_STOCKPILE_EXCLUSION_FRACTION", 0.1) * 100, 0) + " %")},
+                      "text": mtxt[2].format(food=ue(t"{_de(food_frac * 100, 0)} %"),
+                                             needs=ue(t"{_de(df.get('TRADE_ORDER_NEEDS_STOCKPILE_EXCLUSION_FRACTION', 0.1) * 100, 0)} %"))},
             "eintrag": ({"key": eintrag, "name": EINTRAEGE[eintrag][0], "loc": EINTRAEGE[eintrag][1], "text": EINTRAEGE[eintrag][2]}
                         if eintrag and not (eintrag == "any_food" and food_aus) else None),
             "mindestgewinn": df.get("DEFAULT_TRADE_ORDER_MIN_PROFIT") if modus == "profit" else None,

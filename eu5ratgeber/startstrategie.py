@@ -29,21 +29,22 @@ import json
 import os
 import re
 
-from . import gruendung, pfade, techbaum, wiki, wirtschaftsplan
+from . import gruendung, pfade, sprache, techbaum, wiki, wirtschaftsplan
+from .sprache import ue
 
-FORMAT = 3           # Aufbau des Zwischenspeichers _startstrategie_f<FORMAT>.json; erhöhen, wenn sich statisch() ändert
+FORMAT = 4           # Aufbau des Zwischenspeichers _startstrategie_f<FORMAT>.json; erhöhen, wenn sich statisch() ändert
 
 # ---------------------------------------------------------------- Bewertung je Schwerpunkt (Regel des Ratgebers)
 # wie techbaum.vorschlaege: Punkte für Wirkungen in günstiger Richtung; ungünstige Wirkungen derselben Listen ziehen ihre Punkte
 # ab (Nutzer 01.11.: „Leute ausweisen“ bekam 10 Punkte für Wachstum aus der Migrationsgeschwindigkeit, obwohl es die
 # Migrationsanziehung um 2,0 senkt); ungünstige außerhalb der Listen stehen als Nachteil ohne Abzug
 PUNKTE = {
-    "gut_ausstoss": "15 − 1 je Rang (mind. 6), 12 wenn das Gut im Heimatmarkt fehlt – Ausstoß-Modifikator eines Schwerpunkt-Guts",
-    "fokus_mod": "15 – landesweite Entsprechung der Schwerpunkt-Wirkung der Gebäude (local_x → global_x, Liste im Wirtschaftsplan)",
-    "fokus_lokal": "15 – Schwerpunkt-Wirkung der Gebäude im gewählten Ort bzw. in der Provinz (Kabinettsaktion mit Ziel)",
-    "thema_mod": "10 – Modifikator aus der Themenliste des Schwerpunkts (dieselbe Liste wie im Techbaum, techbaum.THEMA_REGEL)",
-    "thema_lokal": "5 – örtliche Entsprechung eines Modifikators der Themenliste (wirkt nur im gewählten Ort bzw. in der Provinz)",
-    "gesellschaft": "5 – schiebt einen Gesellschaftswert zum günstigen Pol des Schwerpunkts (Abschnitt Gesellschaftswerte)",
+    "gut_ausstoss": ue("15 − 1 je Rang (mind. 6), 12 wenn das Gut im Heimatmarkt fehlt – Ausstoß-Modifikator eines Schwerpunkt-Guts"),
+    "fokus_mod": ue("15 – landesweite Entsprechung der Schwerpunkt-Wirkung der Gebäude (local_x → global_x, Liste im Wirtschaftsplan)"),
+    "fokus_lokal": ue("15 – Schwerpunkt-Wirkung der Gebäude im gewählten Ort bzw. in der Provinz (Kabinettsaktion mit Ziel)"),
+    "thema_mod": ue("10 – Modifikator aus der Themenliste des Schwerpunkts (dieselbe Liste wie im Techbaum, techbaum.THEMA_REGEL)"),
+    "thema_lokal": ue("5 – örtliche Entsprechung eines Modifikators der Themenliste (wirkt nur im gewählten Ort bzw. in der Provinz)"),
+    "gesellschaft": ue("5 – schiebt einen Gesellschaftswert zum günstigen Pol des Schwerpunkts (Abschnitt Gesellschaftswerte)"),
 }
 ZUFRIEDEN_MIN = 0.5      # Stand unter 50 % Zufriedenheit: nur mit Warnung vorschlagen
 MACHT_MAX = 0.5          # Privileg hebt die Macht eines Stands, der schon so viel hat: nur mit Warnung (Regel des Ratgebers)
@@ -55,37 +56,37 @@ SCHIEBER = 6             # Einträge je Liste „was schiebt dorthin“
 # Reihenfolge der Bereiche für „Erste Schritte“ (Regel des Ratgebers)
 ERSTE_REIHE = ("kabinett", "forschung", "politlinie", "privileg", "bau", "buendnis", "reform", "rivale", "minister")
 REGELN = {
-    "bewertung": "Regel des Ratgebers: Punkte je Wirkung nach den Listen des Schwerpunkts (Wirtschaftsplan und Techbaum) – günstige "
+    "bewertung": ue("Regel des Ratgebers: Punkte je Wirkung nach den Listen des Schwerpunkts (Wirtschaftsplan und Techbaum) – günstige "
                  "Richtung (Farbe des Modifikators im Spiel) zählt dazu, ungünstige aus denselben Listen ziehen ab; ungünstige "
-                 "außerhalb der Listen stehen als Nachteil ohne Abzug da.",
-    "erste_schritte": "Regel des Ratgebers: je Bereich der beste Vorschlag, in fester Reihenfolge – Kabinett (Aktion zuweisen kostet "
+                 "außerhalb der Listen stehen als Nachteil ohne Abzug da."),
+    "erste_schritte": ue("Regel des Ratgebers: je Bereich der beste Vorschlag, in fester Reihenfolge – Kabinett (Aktion zuweisen kostet "
                       "nichts), Forschung, Politlinie und Privileg (je 20 Politischer Einfluss), Bau, Bündnis, Reform (nur mit freiem "
                       "Platz), Rivale (nur mit freiem Platz), zuletzt ein reiner Ministertausch; die ersten fünf stehen oben. "
                       "Vorschläge mit Warnung (ein Stand fiele unter 50 % Zufriedenheit oder hat schon 50 % Macht) kommen nicht "
-                      "hinein. Der Politische Einfluss wird in dieser Reihenfolge abgezogen – reicht er nicht, steht „erst sparen“ dabei.",
-    "abweichung": "Gezählt wird jede Einstellung, deren Vorschlag vom jetzigen Stand abweicht: Kabinettsplatz (Aktion oder Minister), "
+                      "hinein. Der Politische Einfluss wird in dieser Reihenfolge abgezogen – reicht er nicht, steht „erst sparen“ dabei."),
+    "abweichung": ue("Gezählt wird jede Einstellung, deren Vorschlag vom jetzigen Stand abweicht: Kabinettsplatz (Aktion oder Minister), "
                   "Politlinie, Privileg (höchstens eins je Stand), Reform (nur mit freiem Platz), Rivale (nur mit freiem Platz), "
-                  "Bündnis (ein Vorschlag mit erfüllten Bedingungen). Gebäude und Forschung sind Pläne, keine Einstellungen.",
-    "kabinett": f"Regel des Ratgebers: die Aktionen mit den meisten Punkten auf die Plätze; eine Aktion mit Ende ab "
-                f"{int(BEHALTEN_AB * 100)} % Fortschritt erst abschließen, bei unbekanntem Fortschritt behalten; behalten, wenn der "
-                f"Vorschlag nicht mehr Punkte hat. Aktionen mit Ziel: ob ein passendes Ziel da ist, prüft das Spiel (Stand als Ziel: "
-                f"Zufriedenheit und Macht ausgewertet). Minister: "
-                f"die Person mit der höchsten Fähigkeit der Aktion, ab {MINISTER_MIN} Punkten Vorsprung (Austausch kostet Einfluss).",
-    "gesetze": "Regel des Ratgebers: je Gesetz die Politlinie mit den meisten Punkten; die jetzige bleibt bei Gleichstand. Fiele "
-               f"dadurch ein Stand unter {int(ZUFRIEDEN_MIN * 100)} % Zielzufriedenheit (Wirkung neu − jetzt), steht das als Warnung "
-               "dabei. Gesetze, die nicht änderbar (allow) oder gesperrt (locked) sind, bekommen keinen Vorschlag.",
-    "privilegien": "Regel des Ratgebers: je Stand das mögliche Privileg mit den meisten Punkten. Sinkt dadurch die Zielzufriedenheit "
-                   f"eines Stands unter {int(ZUFRIEDEN_MIN * 100)} % oder hebt es die Macht eines Stands, der schon "
-                   f"{int(MACHT_MAX * 100)} % hat, steht das als Warnung dabei.",
-    "reformen": "Regel des Ratgebers: die mögliche Reform mit den meisten Punkten – vorgeschlagen nur, wenn ein Platz frei ist.",
-    "gesellschaft": f"Regel des Ratgebers: je Achse die Wirkung beider Pole bewerten; günstig ist der Pol mit mehr Punkten. Gezeigt werden "
-                    f"die {TOP_ACHSEN} Achsen mit dem größten Vorsprung.",
-    "buendnis": "Regel des Ratgebers: Kandidaten sind Länder mit Werten des Daten-Mods (Nachbarn, Großmächte, Rivalen …). Reihung: "
+                  "Bündnis (ein Vorschlag mit erfüllten Bedingungen). Gebäude und Forschung sind Pläne, keine Einstellungen."),
+    "kabinett": ue(t"Regel des Ratgebers: die Aktionen mit den meisten Punkten auf die Plätze; eine Aktion mit Ende ab "
+                t"{int(BEHALTEN_AB * 100)} % Fortschritt erst abschließen, bei unbekanntem Fortschritt behalten; behalten, wenn der "
+                t"Vorschlag nicht mehr Punkte hat. Aktionen mit Ziel: ob ein passendes Ziel da ist, prüft das Spiel (Stand als Ziel: "
+                t"Zufriedenheit und Macht ausgewertet). Minister: "
+                t"die Person mit der höchsten Fähigkeit der Aktion, ab {MINISTER_MIN} Punkten Vorsprung (Austausch kostet Einfluss)."),
+    "gesetze": ue(t"Regel des Ratgebers: je Gesetz die Politlinie mit den meisten Punkten; die jetzige bleibt bei Gleichstand. Fiele "
+               t"dadurch ein Stand unter {int(ZUFRIEDEN_MIN * 100)} % Zielzufriedenheit (Wirkung neu − jetzt), steht das als Warnung "
+               t"dabei. Gesetze, die nicht änderbar (allow) oder gesperrt (locked) sind, bekommen keinen Vorschlag."),
+    "privilegien": ue(t"Regel des Ratgebers: je Stand das mögliche Privileg mit den meisten Punkten. Sinkt dadurch die Zielzufriedenheit "
+                   t"eines Stands unter {int(ZUFRIEDEN_MIN * 100)} % oder hebt es die Macht eines Stands, der schon "
+                   t"{int(MACHT_MAX * 100)} % hat, steht das als Warnung dabei."),
+    "reformen": ue("Regel des Ratgebers: die mögliche Reform mit den meisten Punkten – vorgeschlagen nur, wenn ein Platz frei ist."),
+    "gesellschaft": ue(t"Regel des Ratgebers: je Achse die Wirkung beider Pole bewerten; günstig ist der Pol mit mehr Punkten. Gezeigt werden "
+                    t"die {TOP_ACHSEN} Achsen mit dem größten Vorsprung."),
+    "buendnis": ue("Regel des Ratgebers: Kandidaten sind Länder mit Werten des Daten-Mods (Nachbarn, Großmächte, Rivalen …). Reihung: "
                 "Bedingungen erfüllbar, Schutz (sie haben einen Kriegsgrund gegen uns), dann Stärkegewinn (ihre Landesstärke ÷ unser "
                 "Verteidigungsbündnis). „Besser nicht“: Rivalen, Länder mit Orten für eine Gründung und Kriegsgelegenheiten (ein "
-                "Bündnis verbietet den Krieg).",
-    "rivalen": "Regel des Ratgebers: nur bei freiem Rivalenplatz; Kandidaten mit Kriegsgrund gegen uns oder schlechter Meinung von uns, "
-               "nicht unter den Bündnis-Kandidaten.",
+                "Bündnis verbietet den Krieg)."),
+    "rivalen": ue("Regel des Ratgebers: nur bei freiem Rivalenplatz; Kandidaten mit Kriegsgrund gegen uns oder schlechter Meinung von uns, "
+               "nicht unter den Bündnis-Kandidaten."),
 }
 
 # Felder eines Gesetzes, die keine Politlinie sind (laws/readme.txt)
@@ -101,20 +102,20 @@ DEFINES = {"NCountry": ("CABINET_ACTION_SKILL_MODIFIER", "SOCIAL_VALUE_REQUIREME
                           "RANGE_MULTIPLIER_FOR_RIVALRY")}
 # alliance_can_exist (scripted_triggers): Bedingungen in Worten, je mit dem Schlüssel, der in der Spieldatei stehen muss (Test)
 BUENDNIS_BEDINGUNGEN = (
-    ("opinion", "beide Seiten: Meinung voneinander mindestens 0"),
-    ("is_rival_of", "keiner ist Rivale des anderen"),
-    ("is_subject_of", "keiner ist Klientelland des anderen"),
-    ("has_blocked_treaties", "keine gesperrten Verträge"),
-    ("modifier:allowed_alliance", "beide dürfen Bündnisse schließen (Modifikator allowed_alliance)"),
-    ("in_union_with", "keine Personalunion miteinander"),
-    ("coalition", "keine Koalition gegeneinander"),
-    ("is_rebel_country", "keine Aufständischen"),
-    ("can_create_subject_alliance", "Regeln für Klientelländer (can_create_subject_alliance)"),
-    ("is_hegemon", "nicht beide Hegemon"),
+    ("opinion", ue("beide Seiten: Meinung voneinander mindestens 0")),
+    ("is_rival_of", ue("keiner ist Rivale des anderen")),
+    ("is_subject_of", ue("keiner ist Klientelland des anderen")),
+    ("has_blocked_treaties", ue("keine gesperrten Verträge")),
+    ("modifier:allowed_alliance", ue("beide dürfen Bündnisse schließen (Modifikator allowed_alliance)")),
+    ("in_union_with", ue("keine Personalunion miteinander")),
+    ("coalition", ue("keine Koalition gegeneinander")),
+    ("is_rebel_country", ue("keine Aufständischen")),
+    ("can_create_subject_alliance", ue("Regeln für Klientelländer (can_create_subject_alliance)")),
+    ("is_hegemon", ue("nicht beide Hegemon")),
 )
-FAEHIGKEIT = {"adm": "Verwaltung", "dip": "Diplomatie", "mil": "Militär"}      # ability der Kabinettsaktionen
-ZIELART = {"province": "Provinz", "location": "Ort", "area": "Gebiet", "region": "Region", "culture": "Kultur", "religion": "Religion",
-           "estate": "Stand", "country": "Land", "character": "Person", "value": "Wert", "boolean": "Ja/Nein"}
+FAEHIGKEIT = {"adm": ue("Verwaltung"), "dip": ue("Diplomatie"), "mil": ue("Militär")}      # ability der Kabinettsaktionen
+ZIELART = {"province": ue("Provinz"), "location": ue("Ort"), "area": ue("Gebiet"), "region": ue("Region"), "culture": ue("Kultur"), "religion": ue("Religion"),
+           "estate": "Stand" if sprache.DEUTSCH else "Estate", "country": ue("Land"), "character": ue("Person"), "value": ue("Wert"), "boolean": ue("Ja/Nein")}
 
 F_OBERHERR = "oberherr"   # Fakt aus dem Feld gruendung der Momentaufnahme (Format 17): kein Oberherr -> is_subject_of = nein
 # Beziehungen (Daten-Mod RG1D), deren Länder als Bündnispartner infrage kommen – „grossmacht“ allein (every_other_great_power, weltweit)
@@ -142,11 +143,11 @@ def _de(v, d=2):
 
 
 def _pz(v, d=1):
-    return _de(v * 100, d) + " %"
+    return ue(t"{_de(v * 100, d)} %")
 
 
 def _dauer(d):
-    for f, viel, eins in (("years", "Jahre", "Jahr"), ("months", "Monate", "Monat"), ("weeks", "Wochen", "Woche"), ("days", "Tage", "Tag")):
+    for f, viel, eins in (("years", ue("Jahre"), ue("Jahr")), ("months", ue("Monate"), ue("Monat")), ("weeks", ue("Wochen"), ue("Woche")), ("days", ue("Tage"), ue("Tag"))):
         if _num(d.get(f)):
             return f"{_de(d[f], 1)} {eins if d[f] == 1 else viel}"
     return None
@@ -180,8 +181,8 @@ def _nie(t):
 
 def _kosten(d, nm):
     if not isinstance(d, dict) or not d:
-        return "kostenlos"
-    return ", ".join(f"{nm(k)} {_de(v, 2)}" for k, v in d.items() if _num(v)) or "kostenlos"
+        return ue("kostenlos")
+    return ", ".join(f"{nm(k)} {_de(v, 2)}" for k, v in d.items() if _num(v)) or ue("kostenlos")
 
 
 def _pole(achse):
@@ -356,30 +357,30 @@ def unterhalt(R, eco_wir, eco_sie, meinung_sie, grossmacht):
     e = R.get("RELATIVE_ECO_BASE") or {}
     o = R.get("UPKEEP_TARGET_OPINION") or {}
     if not _num(b) or not _num(e.get("multiply")) or not _num(o.get("add")) or not _num(o.get("subtract_divide")):
-        return None, ["Aufbau von alliance_upkeep_cost unbekannt – nicht gerechnet"]
+        return None, [ue("Aufbau von alliance_upkeep_cost unbekannt – nicht gerechnet")]
     summe += b
-    teile.append(f"Grundwert {_de(b)}")
+    teile.append(ue(t"Grundwert {_de(b)}"))
     if _num(eco_wir) and _num(eco_sie):
         x = eco_sie / max(eco_wir, e.get("divide_min") or 0) * e["multiply"] if max(eco_wir, e.get("divide_min") or 0) else None
         if x is not None:
             x = min(e["max"], x) if _num(e.get("max")) else x
             x = max(e["min"], x) if _num(e.get("min")) else x
             summe += x
-            teile.append(f"Wirtschaft {_de(eco_sie, 1)} ÷ {_de(eco_wir, 1)} × {_de(e['multiply'])} = {_de(x)}"
-                         + (f" (begrenzt auf {_de(e['min'])}–{_de(e['max'])})" if _num(e.get("min")) and _num(e.get("max")) else ""))
+            teile.append(ue(t"Wirtschaft {_de(eco_sie, 1)} ÷ {_de(eco_wir, 1)} × {_de(e['multiply'])} = {_de(x)}")
+                         + (ue(t" (begrenzt auf {_de(e['min'])}–{_de(e['max'])})") if _num(e.get("min")) and _num(e.get("max")) else ""))
     else:
-        return None, teile + ["Wirtschaftsgrundlage fehlt (Daten-Mod)"]
+        return None, teile + [ue("Wirtschaftsgrundlage fehlt (Daten-Mod)")]
     if _num(meinung_sie):
         y = o["add"] - meinung_sie / o["subtract_divide"]
         summe += y
-        teile.append(f"Meinung: {_de(o['add'])} − ({_de(meinung_sie, 0)} ÷ {_de(o['subtract_divide'], 0)}) = {_de(y)}")
+        teile.append(ue(t"Meinung: {_de(o['add'])} − ({_de(meinung_sie, 0)} ÷ {_de(o['subtract_divide'], 0)}) = {_de(y)}"))
     else:
-        return None, teile + ["Meinung unbekannt"]
+        return None, teile + [ue("Meinung unbekannt")]
     g = (R.get("UPKEEP_THEY_GREAT_POWER") or {}).get("value")
     if grossmacht and _num(g):
         summe += g
-        teile.append(f"Großmacht +{_de(g)}")
-    teile.append("ohne Blocksättigung und Regionalmacht-Zuschlag (unbekannt)")
+        teile.append(ue(t"Großmacht +{_de(g)}"))
+    teile.append(ue("ohne Blocksättigung und Regionalmacht-Zuschlag (unbekannt)"))
     return round(summe, 3), teile
 
 
@@ -405,52 +406,52 @@ class Pruefer(gruendung.Pruefer):
             return self.frei_knoten("unlock_" + m.group(1), val["type"])
         if k0 == "has_dlc" and X.get("dlcs") is not None:
             name = gruendung._dlc_name(val) or str(val)
-            return self.k(f"Erweiterung „{name}“ (installiert laut Spielordner)", str(val).lower() in X["dlcs"])
+            return self.k(ue(t"Erweiterung „{name}“ (installiert laut Spielordner)"), str(val).lower() in X["dlcs"])
         m = re.match(r"^num_locations(>=|<=|>|<)?$", k0)
         if m and _num(val) and _num(X.get("orte")):
             op = m.group(1) or "="
             ok = techbaum.VERGLEICH[op](X["orte"], val) if op in techbaum.VERGLEICH else X["orte"] == val
-            return self.k(f"Zahl der Orte {gruendung.VERGLEICH.get(op, op)} {_de(val, 0)}", ok, ist=str(X["orte"]))
+            return self.k(ue(t"Zahl der Orte {gruendung.VERGLEICH.get(op, op)} {_de(val, 0)}"), ok, ist=str(X["orte"]))
         if k0 == "has_embraced_institution" and X.get("institutionen") is not None:
             i = gruendung._ohne(val, "institution")
-            return self.k(f"Institution „{self.n(i)}“ eingeführt", i in set(X["institutionen"]))
+            return self.k(ue(t"Institution „{self.n(i)}“ eingeführt"), i in set(X["institutionen"]))
         m = re.match(r"^(cultural|religious)_unity(>=|<=|>|<)$", k0)
         ist = X.get("einheit" if m and m.group(1) == "cultural" else "rel_einheit") if m else None
         if m and _num(val) and _num(ist):
-            return self.k(f"{'Kulturelle' if m.group(1) == 'cultural' else 'Religiöse'} Einheit {gruendung.VERGLEICH[m.group(2)]} "
-                          f"{_pz(val, 0)}", techbaum.VERGLEICH[m.group(2)](ist, val), ist=_pz(ist, 1))
+            return self.k(ue(t"{ue('Kulturelle') if m.group(1) == 'cultural' else ue('Religiöse')} Einheit {gruendung.VERGLEICH[m.group(2)]} "
+                          t"{_pz(val, 0)}"), techbaum.VERGLEICH[m.group(2)](ist, val), ist=_pz(ist, 1))
         if k0.startswith("modifier:") and gruendung._jn(val) is not None and X.get("landmod"):
             mk = k0[9:]
             v = X["landmod"].get(mk)
             name = ((X.get("mt") or {}).get(mk) or {}).get("name") or mk
             j = gruendung._jn(val)
-            return self.k(f"Landesmodifikator „{name}“ {'vorhanden' if j else 'nicht vorhanden'} (Daten-Mod)",
+            return self.k(ue(t"Landesmodifikator „{name}“ {ue('vorhanden') if j else ue('nicht vorhanden')} (Daten-Mod)"),
                           None if not _num(v) else (v > 0) == j, ist=_de(v) if _num(v) else None)
         if k0 in ("has_law", "has_policy") and isinstance(val, str) and X.get("gesetze") is not None:
             x = gruendung._ohne(gruendung._ohne(val, "law"), "policy")
             menge = set(X["gesetze"]) if k0 == "has_law" else set(X["gesetze"].values())
-            return self.k(f"{'Gesetz' if k0 == 'has_law' else 'Politlinie'} „{self.n(x)}“ gilt", x in menge)
+            return self.k(ue(t"{ue('Gesetz') if k0 == 'has_law' else ue('Politlinie')} „{self.n(x)}“ gilt"), x in menge)
         m = re.match(r"^societal_value:(\w+?)(>=|<=|>|<)$", k0)
         if m and _num(val) and _num((X.get("sv") or {}).get(m.group(1))):
             v = X["sv"][m.group(1)]
-            return self.k(f"Gesellschaftswert {self.n(m.group(1))} {gruendung.VERGLEICH[m.group(2)]} {_de(val, 0)}",
+            return self.k(ue(t"Gesellschaftswert {self.n(m.group(1))} {gruendung.VERGLEICH[m.group(2)]} {_de(val, 0)}"),
                           techbaum.VERGLEICH[m.group(2)](v, val), ist=_de(v, 0))
         if k0 == "is_subject_of" and F_OBERHERR in self.F and self.F.get("untertan") is False:
-            return self.k(f"Ist Klientelland von {self.n(gruendung._ohne(val, 'c'))}", False)
+            return self.k(ue(t"Ist Klientelland von {self.n(gruendung._ohne(val, 'c'))}"), False)
         if k0 == "scope:is_active":
             j = gruendung._jn(val)
-            return self.k("Aktion läuft bereits" if j else "Aktion läuft noch nicht", None if j is None else self.aktiv == j)
+            return self.k(ue("Aktion läuft bereits") if j else ue("Aktion läuft noch nicht"), None if j is None else self.aktiv == j)
         return super().knoten(key, val, scope, neg)
 
     def frei_knoten(self, feld, item):
         adv = (self.X.get("frei") or {}).get(feld, {}).get(item) or []
         if not adv:
-            return self.k("Freigeschaltet (nur durch Ereignis oder Effekt – kein Fortschritt schaltet es frei)", None)
+            return self.k(ue("Freigeschaltet (nur durch Ereignis oder Effekt – kein Fortschritt schaltet es frei)"), None)
         er = self.X.get("erforscht") or set()
-        namen = " oder ".join(f"„{(self.X.get('adv_namen') or {}).get(a) or a}“" for a in adv)
+        namen = ue(" oder ").join(ue(t"„{(self.X.get('adv_namen') or {}).get(a) or a}“") for a in adv)
         ok = any(a in er for a in adv)
-        return self.k(f"Freigeschaltet durch Fortschritt {namen}", ok, techbaum=f"techbaum/{adv[0]}",
-                      handlung=None if ok else f"Fortschritt {namen} erforschen", bereich="staat")
+        return self.k(ue(t"Freigeschaltet durch Fortschritt {namen}"), ok, techbaum=f"techbaum/{adv[0]}",
+                      handlung=None if ok else ue(t"Fortschritt {namen} erforschen"), bereich="staat")
 
 
 def _und(w):
@@ -466,11 +467,11 @@ def pruefe(P, e, aktiv=False, frei_feld=None, extra=()):
     pot = P.block(e["pot"]) if e.get("pot") else []
     pot_ok = _und(x["ok"] for x in pot) if pot else True
     if pot:
-        knoten.append(P.k("Sichtbar für uns (potential):", pot_ok, kinder=pot, art="und"))
+        knoten.append(P.k(ue("Sichtbar für uns (potential):"), pot_ok, kinder=pot, art="und"))
     al = P.block(e["allow"]) if e.get("allow") else []
     al_ok = _und(x["ok"] for x in al) if al else True
     if al:
-        knoten.append(P.k("Wählbar (allow):", al_ok, kinder=al, art="und"))
+        knoten.append(P.k(ue("Wählbar (allow):"), al_ok, kinder=al, art="und"))
     fr_ok = True
     if e.get("frei") and frei_feld:
         n = P.frei_knoten(frei_feld, e["_key"]) if e.get("_key") else None
@@ -520,14 +521,14 @@ def bewerte(w, C, guenstig=None, unguenstig=None):
     p, gr, na = 0, [], []
     gruppen = {}
     for m, mn, txt, ri, ebene, zahl, bedingt in w:
-        t = f"{mn} {txt}" + (" (im Ziel)" if ebene != "land" else "") + (" (nur unter Bedingung)" if bedingt else "")
+        t = f"{mn} {txt}" + (ue(" (im Ziel)") if ebene != "land" else "") + (ue(" (nur unter Bedingung)") if bedingt else "")
         if m.startswith("monthly_towards_"):
             pol = m[16:]
             if guenstig and pol in guenstig and (not _num(zahl) or zahl > 0):
                 p += 5
-                gr.append([5, f"{t} – „{guenstig[pol]}“ ist für den Schwerpunkt günstig", "gesellschaft"])
+                gr.append([5, ue(t"{t} – „{guenstig[pol]}“ ist für den Schwerpunkt günstig"), "gesellschaft"])
             elif unguenstig and pol in unguenstig and (not _num(zahl) or zahl > 0):
-                na.append(f"{t} – schiebt weg von „{unguenstig[pol]}“")
+                na.append(ue(t"{t} – schiebt weg von „{unguenstig[pol]}“"))
             continue
         treffer = None
         mo = AUSSTOSS.match(m)
@@ -535,18 +536,18 @@ def bewerte(w, C, guenstig=None, unguenstig=None):
             n = C["rang"].get(mo.group(1))
             g = C["gutname"].get(mo.group(1)) or mo.group(1)
             treffer = (12 if n is None else max(6, 15 - (n - 1)),
-                       f"Schwerpunkt-Gut {g}" + ("" if n else ", im Heimatmarkt nicht vorhanden"))
+                       ue(t"Schwerpunkt-Gut {g}") + ("" if n else ue(", im Heimatmarkt nicht vorhanden")))
         elif m in C["glob"]:
-            treffer = (15, f"landesweit wie die Schwerpunkt-Wirkung „{(C['mt'].get(C['glob'][m]) or {}).get('name') or C['glob'][m]}“")
+            treffer = (15, ue(t"landesweit wie die Schwerpunkt-Wirkung „{(C['mt'].get(C['glob'][m]) or {}).get('name') or C['glob'][m]}“"))
         elif m in C["lokal"]:
-            treffer = (15, "Schwerpunkt-Wirkung der Gebäude (Wirtschaftsplan)")
+            treffer = (15, ue("Schwerpunkt-Wirkung der Gebäude (Wirtschaftsplan)"))
         elif C["muster"] and C["muster"].match(m):
-            treffer = (10, f"Thema {C['thema']}")
+            treffer = (10, ue(t"Thema {C['thema']}"))
         elif m.startswith("local_") and C["muster"] and C["muster"].match("global_" + m[6:]):
-            treffer = (5, f"Thema {C['thema']}, nur im Ziel")
+            treffer = (5, ue(t"Thema {C['thema']}, nur im Ziel"))
         if not treffer:
             if ri == -1:
-                na.append(f"{t} – ungünstig")          # außerhalb der Listen: kein Abzug, aber genannt (Prüfer 31.10.)
+                na.append(ue(t"{t} – ungünstig"))          # außerhalb der Listen: kein Abzug, aber genannt (Prüfer 31.10.)
             continue
         if ri == 1 and bedingt:
             gruppen.setdefault(bedingt, []).append([treffer[0], f"{t} – {treffer[1]}", "direkt"])
@@ -555,10 +556,10 @@ def bewerte(w, C, guenstig=None, unguenstig=None):
             gr.append([treffer[0], f"{t} – {treffer[1]}", "direkt"])
         elif ri == -1:
             if bedingt:
-                na.append(f"{t} – ungünstig ({treffer[1]})")
+                na.append(ue(t"{t} – ungünstig ({treffer[1]})"))
             else:                                    # ungünstig in den Listen des Schwerpunkts: Abzug (Nutzer 01.11.)
                 p -= treffer[0]
-                na.append(f"{t} – ungünstig ({treffer[1]}, −{treffer[0]} Punkte)")
+                na.append(ue(t"{t} – ungünstig ({treffer[1]}, −{treffer[0]} Punkte)"))
     if gruppen:                                  # Blöcke mit eigener Bedingung: nur der beste zählt
         beste = max(gruppen.values(), key=lambda g: sum(x[0] for x in g))
         p += sum(x[0] for x in beste)
@@ -635,26 +636,26 @@ def kabinett_vorschlag(plaetze, K, status, P_, personen=None, behalten=None, fak
         j = s["jetzt"]
         if j.get("aktion") and (K.get(j["aktion"]) or {}).get("ende"):
             if _num(j.get("fortschritt")) and j["fortschritt"] >= behalten:
-                s["vorschlag"], s["grund"] = j["aktion"], f"erst abschließen ({_pz(j['fortschritt'], 0)} erreicht)"
+                s["vorschlag"], s["grund"] = j["aktion"], ue(t"erst abschließen ({_pz(j['fortschritt'], 0)} erreicht)")
                 belegt.add(j["aktion"])
             elif not _num(j.get("fortschritt")):     # dreiwertig: unbekannt ist nicht „unter 50 %“ (Prüfer 31.10.)
-                s["vorschlag"], s["grund"] = j["aktion"], "behalten – Aktion mit Ende, Fortschritt unbekannt (im Spiel prüfen)"
+                s["vorschlag"], s["grund"] = j["aktion"], ue("behalten – Aktion mit Ende, Fortschritt unbekannt (im Spiel prüfen)")
                 belegt.add(j["aktion"])
     rest = [s for s in out if not s["vorschlag"]]
     wunsch = [k for k in rang if k not in belegt][:len(rest)]
     for s in rest:
         a = s["jetzt"].get("aktion")
         if a and a in wunsch:
-            s["vorschlag"], s["grund"] = a, "behalten – gehört zu den besten Aktionen"
+            s["vorschlag"], s["grund"] = a, ue("behalten – gehört zu den besten Aktionen")
             wunsch.remove(a)
             belegt.add(a)
     for s in sorted([s for s in rest if not s["vorschlag"]], key=lambda s: pkt(s["jetzt"].get("aktion"))):
         a = s["jetzt"].get("aktion")
         if wunsch and pkt(wunsch[0]) > pkt(a):
             s["vorschlag"] = wunsch.pop(0)
-            s["grund"] = f"mehr Punkte ({pkt(s['vorschlag'])} statt {max(0, pkt(a))})" if a else "freier Platz"
+            s["grund"] = ue(t"mehr Punkte ({pkt(s['vorschlag'])} statt {max(0, pkt(a))})") if a else ue("freier Platz")
         else:
-            s["vorschlag"], s["grund"] = a, "behalten – kein besserer Vorschlag" if a else "kein Vorschlag"
+            s["vorschlag"], s["grund"] = a, ue("behalten – kein besserer Vorschlag") if a else ue("kein Vorschlag")
     # Minister: höchste Fähigkeit der Aktion unter den freien Personen – erst die Plätze ohne Person, dann der größte Vorsprung
     vergeben = {(x["jetzt"].get("adm"), x["jetzt"].get("dip"), x["jetzt"].get("mil")) for x in out if x["jetzt"].get("person")}
     for s in out:
@@ -711,10 +712,10 @@ def einfluss_rechnen(schritte, pi):
             continue
         if not sparen and rest >= z:
             rest -= z
-            x["kosten"] = f"{x.get('kosten') or ''} – danach {_de(rest, 1)} übrig".lstrip(" –")
+            x["kosten"] = ue(t"{x.get('kosten') or ''} – danach {_de(rest, 1)} übrig").lstrip(" –")
         else:
-            x["kosten"] = (f"{x.get('kosten') or ''} – erst sparen: " + (f"{_de(rest, 1)} da, {_de(z - rest, 1)} fehlen"
-                                                                      if not sparen else "nach dem Schritt davor")).lstrip(" –")
+            x["kosten"] = (ue(t"{x.get('kosten') or ''} – erst sparen: ") + (ue(t"{_de(rest, 1)} da, {_de(z - rest, 1)} fehlen")
+                                                                      if not sparen else ue("nach dem Schritt davor"))).lstrip(" –")
             x["sparen"], sparen = True, True
     return schritte
 
@@ -757,7 +758,7 @@ def fuer_series(db, last, voll, vg, names=None, wp=None, tv=None, nb=None, gr=No
     try:
         live = live_daten(db, (last.get("meta") or {}).get("tag"), ld, lv) if live_ok else None
     except Exception as e:                       # noqa: BLE001
-        return {"fehler": f"Daten-Mod: {type(e).__name__}: {e}"}
+        return {"fehler": ue(t"Daten-Mod: {type(e).__name__}: {e}")}
     return build(last, voll, vg, names, wp, tv, nb, gr, live)
 
 
@@ -876,11 +877,11 @@ def _build(last, voll, vg, names, wp, tv, nb, gr, live):
         extra_g = []                                 # Gesetz änderbar (allow) und nicht gesperrt (locked) – laws/readme.txt
         if LG.get("allow"):
             al = P.block(LG["allow"])
-            extra_g.append(P.k("Gesetz änderbar (allow des Gesetzes):", _und(x["ok"] for x in al), kinder=al, art="und"))
+            extra_g.append(P.k(ue("Gesetz änderbar (allow des Gesetzes):"), _und(x["ok"] for x in al), kinder=al, art="und"))
         if LG.get("locked"):
             lo = P.block(LG["locked"])
             lo_ok = _und(x["ok"] for x in lo)
-            extra_g.append(P.k("Gesetz nicht gesperrt – gesperrt, wenn (locked):", None if lo_ok is None else not lo_ok,
+            extra_g.append(P.k(ue("Gesetz nicht gesperrt – gesperrt, wenn (locked):"), None if lo_ok is None else not lo_ok,
                                kinder=lo, art="und"))
         for pk, e in (LG.get("pol") or {}).items():
             st, bed = pruefe(P, {**e, "_key": pk}, pk == pk_jetzt, "unlock_policy", extra_g if pk != pk_jetzt else ())
@@ -896,18 +897,18 @@ def _build(last, voll, vg, names, wp, tv, nb, gr, live):
             continue
         extra = []
         if e.get("gov"):
-            extra.append(P.k(f"Regierungsform {nm(e['gov'])}", None if not F.get("regierungsform") else e["gov"] == F["regierungsform"]))
+            extra.append(P.k(ue(t"Regierungsform {nm(e['gov'])}"), None if not F.get("regierungsform") else e["gov"] == F["regierungsform"]))
         if e.get("age") in zeit:
-            extra.append(P.k(f"ab dem Zeitalter „{nm(e['age'])}“ (Feld age)", None if z_jetzt is None else z_jetzt >= zeit.index(e["age"])))
+            extra.append(P.k(ue(t"ab dem Zeitalter „{nm(e['age'])}“ (Feld age)"), None if z_jetzt is None else z_jetzt >= zeit.index(e["age"])))
         for pol in e.get("sv") or []:
             ak = next((a for a in S["achsen"] if pol in _pole(a)), None)
             v = pol_wert(ak, pol, sv.get(ak)) if ak else None
             ziel = S["defines"].get("SOCIAL_VALUE_REQUIREMENT_FOR_REFORM")
-            extra.append(P.k(f"Gesellschaftswert „{nm(pol + '_focus')}“ mindestens {_de(ziel, 0) if _num(ziel) else '?'} "
-                             "(SOCIAL_VALUE_REQUIREMENT_FOR_REFORM)", None if not _num(v) or not _num(ziel) else v >= ziel,
+            extra.append(P.k(ue(t"Gesellschaftswert „{nm(pol + '_focus')}“ mindestens {_de(ziel, 0) if _num(ziel) else '?'} "
+                             t"(SOCIAL_VALUE_REQUIREMENT_FOR_REFORM)"), None if not _num(v) or not _num(ziel) else v >= ziel,
                              ist=_de(v, 0) if _num(v) else None))
         if e.get("major") and rk not in reformen_jetzt:
-            extra.append(P.k("nur eine große Reform je Land (major)", not major_jetzt))
+            extra.append(P.k(ue("nur eine große Reform je Land (major)"), not major_jetzt))
         st, bed = pruefe(P, {**e, "_key": rk}, rk in reformen_jetzt, "unlock_government_reform", extra)
         ref_status[rk] = st
         if st != "n":
@@ -928,7 +929,7 @@ def _build(last, voll, vg, names, wp, tv, nb, gr, live):
     # an die Seite: nur gezeigte Einträge (Status nicht „nicht für uns“), ohne Rohbedingungen und Beschreibung (steht im Wiki)
     return {
         "datum": meta.get("datum"), "mod_datum": live.get("datum"), "mit_mod": bool(live),
-        "fokus_namen": {k: v[0] for k, v in wirtschaftsplan.FOKUS.items()}, "themen": {k: v[0] for k, v in techbaum.THEMA_REGEL.items()},
+        "fokus_namen": {k: ue(v[0]) for k, v in wirtschaftsplan.FOKUS.items()}, "themen": {k: v[0] for k, v in techbaum.THEMA_REGEL.items()},
         "stand_namen": {s: nm(s) for s in sorted({e["stand"] for e in S["privilegien"].values()}
                                                   | {x for g in S["gesetze"].values() for p in g["pol"].values() for x in p["staende"]})},
         "punkte": PUNKTE, "regeln": REGELN, "preise": S["preise"], "defines": S["defines"],
@@ -991,8 +992,8 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
         p, g, n = bewerte(K[k]["w"], C, guenstig, unguenstig)
         if K[k].get("sv") and top:
             p += 5
-            g.append([5, f"kann einen Gesellschaftswert gezielt verschieben (societal_values {_de(K[k]['sv'])} laut Spieldatei) – "
-                         f"günstig: „{top[0]['pol_name']}“", "gesellschaft"])
+            g.append([5, ue(t"kann einen Gesellschaftswert gezielt verschieben (societal_values {_de(K[k]['sv'])} laut Spieldatei) – "
+                         t"günstig: „{top[0]['pol_name']}“"), "gesellschaft"])
         pk_kab[k] = (p, g, n)
     kab = kabinett_vorschlag([p if not p.get("frei") else {"platz": None} for p in plaetze], K, kab_status, pk_kab, personen,
                              faktor=S["defines"].get("CABINET_ACTION_SKILL_MODIFIER") or 0.005)
@@ -1060,7 +1061,7 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
             for p, e in ((S["gesetze"].get(lk) or {}).get("pol") or {}).items():
                 hat = [x for x in e["w"] if x[0] == m]
                 hat_g = [x for x in e["w"] if x[0] == g]
-                eintrag = {"art": "Politlinie", "key": p, "gesetz": lk, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
+                eintrag = {"art": ue("Politlinie"), "key": p, "gesetz": lk, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
                            "status": pol_status.get((lk, p))}
                 if p == pj and hat:
                     wirkt.append(eintrag)
@@ -1071,7 +1072,7 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
         for p, e in PR.items():
             hat = [x for x in e["w"] if x[0] == m]
             hat_g = [x for x in e["w"] if x[0] == g]
-            eintrag = {"art": "Privileg", "key": p, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
+            eintrag = {"art": ue("Privileg"), "key": p, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
                        "status": priv_status.get(p)}
             if p in gew and hat:
                 wirkt.append(eintrag)
@@ -1082,7 +1083,7 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
         for r, e in RF.items():
             hat = [x for x in e["w"] if x[0] == m]
             hat_g = [x for x in e["w"] if x[0] == g]
-            eintrag = {"art": "Reform", "key": r, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
+            eintrag = {"art": ue("Reform"), "key": r, "name": e["n"], "wert": (hat or hat_g or [[0, 0, ""]])[0][2],
                        "status": ref_status.get(r)}
             if r in reformen_jetzt and hat:
                 wirkt.append(eintrag)
@@ -1111,33 +1112,33 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
     tausch_preis = (preise.get("replace_cabinet_member") or {}).get("zahl")
 
     def einfluss_text(z):
-        return f"{_de(z, 0)} Politischer Einfluss" if _num(z) and z > 0 else None
+        return ue(t"{_de(z, 0)} Politischer Einfluss") if _num(z) and z > 0 else None
     V = {b: [] for b in ERSTE_REIHE}
     for s in kab:
         if not s["abweichung"] or s.get("warnungen"):
             continue
         a, j, m = s["vorschlag"], s["jetzt"], s.get("minister")
-        nr = f"Platz {s['platz'] + 1}" if _num(s["platz"]) else "Neuer Platz"
+        nr = ue(t"Platz {s['platz'] + 1}") if _num(s["platz"]) else ue("Neuer Platz")
         tausch = bool(m and j.get("person"))
         if a == j.get("aktion"):                     # nur der Minister ändert sich -> eigener Bereich, zuletzt (Prüfer 31.10.)
             if m:
                 V["minister"].append({
-                    "text": f"{nr}: Minister {m['name']} statt {j.get('person') or '–'} für „{K[a]['n'] if a in K else j.get('aktion_name')}“",
-                    "warum": f"{FAEHIGKEIT.get(s['faehigkeit'], s['faehigkeit'])} {_de(m['wert'], 0)} statt "
-                             f"{_de(m['jetzt'], 0) if _num(m['jetzt']) else '–'}: Gesamtsteigerung +{_de(m['mehr'] * 100, 1)} %-Pkt. "
-                             "(CABINET_ACTION_SKILL_MODIFIER)",
+                    "text": ue(t"{nr}: Minister {m['name']} statt {j.get('person') or '–'} für „{K[a]['n'] if a in K else j.get('aktion_name')}“"),
+                    "warum": ue(t"{FAEHIGKEIT.get(s['faehigkeit'], s['faehigkeit'])} {_de(m['wert'], 0)} statt "
+                             t"{_de(m['jetzt'], 0) if _num(m['jetzt']) else '–'}: Gesamtsteigerung +{_de(m['mehr'] * 100, 1)} %-Pkt. "
+                             t"(CABINET_ACTION_SKILL_MODIFIER)"),
                     "kosten": einfluss_text(tausch_preis) if tausch else None, "einfluss": tausch_preis if tausch else None,
                     "link": "#regierung"})
             continue
-        txt = f"{nr}: „{K[a]['n']}“" + (f" statt „{K[j['aktion']]['n'] if j['aktion'] in K else j.get('aktion_name')}“"
+        txt = ue(t"{nr}: „{K[a]['n']}“") + (ue(t" statt „{K[j['aktion']]['n'] if j['aktion'] in K else j.get('aktion_name')}“")
                                          if j.get("aktion") else "")
         if m:
-            txt += f", Minister {m['name']} ({FAEHIGKEIT.get(s['faehigkeit'], s['faehigkeit'])} {_de(m['wert'], 0)})"
+            txt += ue(t", Minister {m['name']} ({FAEHIGKEIT.get(s['faehigkeit'], s['faehigkeit'])} {_de(m['wert'], 0)})")
         z = (kab_preis if _num(kab_preis) else 0) + (tausch_preis if tausch and _num(tausch_preis) else 0)
         V["kabinett"].append({"text": txt, "warum": "; ".join(s["gruende"][:2]) or s.get("grund") or "",
                               "kosten": "; ".join(x for x in (
                                   (preise.get("set_cabine_action") or {}).get("text"),
-                                  f"Minister tauschen: {(preise.get('replace_cabinet_member') or {}).get('text')}" if tausch else None)
+                                  ue(t"Minister tauschen: {(preise.get('replace_cabinet_member') or {}).get('text')}") if tausch else None)
                                   if x) or None,
                               "einfluss": z or None, "link": "#regierung"})
     s1 = forschung_schritt(forschung)
@@ -1146,28 +1147,28 @@ def _fokus(fk, C, S, top, guenstig, unguenstig, plaetze, personen, kab_status, g
     for g in ges:
         if g["abweichung"] and not g["warnungen"]:
             pol = S["gesetze"][g["gesetz"]]["pol"]
-            V["politlinie"].append({"text": f"„{pol[g['vorschlag']]['n']}“ ({S['gesetze'][g['gesetz']]['n']}) statt "
-                                            f"„{pol[g['jetzt']]['n'] if g['jetzt'] in pol else nm(g['jetzt'])}“",
+            V["politlinie"].append({"text": ue(t"„{pol[g['vorschlag']]['n']}“ ({S['gesetze'][g['gesetz']]['n']}) statt "
+                                            t"„{pol[g['jetzt']]['n'] if g['jetzt'] in pol else nm(g['jetzt'])}“"),
                                     "warum": "; ".join(g["gruende"][:2]), "kosten": einfluss_text(pol_preis), "einfluss": pol_preis,
                                     "link": "#startstrategie"})
             break
     for p in sorted([p for p in priv if p["vorschlag"] and not p["warnungen"]], key=lambda p: -p["punkte"])[:1]:
-        V["privileg"].append({"text": f"„{PR[p['vorschlag']]['n']}“ ({nm(p['stand'])}) gewähren",
+        V["privileg"].append({"text": ue(t"„{PR[p['vorschlag']]['n']}“ ({nm(p['stand'])}) gewähren"),
                               "warum": "; ".join(p["gruende"][:2]), "kosten": einfluss_text(priv_preis), "einfluss": priv_preis,
                               "link": "#staende"})
     if bau:
-        V["bau"].append({"text": f"{bau[0]['was']}" + (f" in {bau[0]['ort']}" if bau[0].get("ort") else ""),
+        V["bau"].append({"text": f"{bau[0]['was']}" + (ue(t" in {bau[0]['ort']}") if bau[0].get("ort") else ""),
                          "warum": bau[0].get("warum") or "", "kosten": bau[0].get("kosten"), "link": "#wirtschaftsplan"})
     b = diplo.get("buendnis_vorschlag")
     if b:
         V["buendnis"].append({"text": b["text"], "warum": b["warum"], "kosten": b.get("kosten"), "link": "#nachbarn"})
     if reform["abweichung"] and not reform["warnungen"]:
-        V["reform"].append({"text": f"„{RF[rbest]['n']}“ einführen", "warum": "; ".join(reform["gruende"][:2]),
+        V["reform"].append({"text": ue(t"„{RF[rbest]['n']}“ einführen"), "warum": "; ".join(reform["gruende"][:2]),
                             "kosten": None, "link": "#regierung"})
     rv = diplo.get("rivale_vorschlag")
     if rv:
         V["rivale"].append({"text": rv["text"], "warum": rv["warum"], "kosten": None, "link": "#diplomatie"})
-    out = {"name": wirtschaftsplan.FOKUS[fk][0], "thema": C["thema"], "kabinett": kab, "kabinett_punkte": kab_alle, "gesetze": ges,
+    out = {"name": ue(wirtschaftsplan.FOKUS[fk][0]), "thema": C["thema"], "kabinett": kab, "kabinett_punkte": kab_alle, "gesetze": ges,
            "privilegien": priv,
            "reform": reform, "gesellschaft": ges_w, "bau": bau, "forschung": forschung,
            "forschung_fehler": (tv or {}).get("fehler"),
@@ -1196,8 +1197,8 @@ def forschung_schritt(forschung):
     for e in forschung:
         if not e.get("ziel"):
             if not e.get("laeuft"):
-                return {"text": f"„{e['name']}“ erforschen", "warum": e.get("grund") or "",
-                        "kosten": f"{_de(e['kosten'], 2)} Forschung" if _num(e.get("kosten")) else None, "link": f"#techbaum/{e['key']}"}
+                return {"text": ue(t"„{e['name']}“ erforschen"), "warum": e.get("grund") or "",
+                        "kosten": ue(t"{_de(e['kosten'], 2)} Forschung") if _num(e.get("kosten")) else None, "link": f"#techbaum/{e['key']}"}
             return None
         weg = e.get("weg") or []
         if any(w.get("gesperrt") for w in weg):
@@ -1206,8 +1207,8 @@ def forschung_schritt(forschung):
         if frei and frei.get("rest") is not None:          # dieser Schritt ist die laufende Forschung (Rest laut Daten-Mod)
             return None
         if frei:
-            return {"text": f"„{frei['name']}“ erforschen (Weg zu „{e['name']}“)", "warum": e.get("grund") or "",
-                    "kosten": f"Weg {_de(e['kosten'], 2)} Forschung" if _num(e.get("kosten")) else None,
+            return {"text": ue(t"„{frei['name']}“ erforschen (Weg zu „{e['name']}“)"), "warum": e.get("grund") or "",
+                    "kosten": ue(t"Weg {_de(e['kosten'], 2)} Forschung") if _num(e.get("kosten")) else None,
                     "link": f"#techbaum/{e['key']}"}
     return None
 
@@ -1225,8 +1226,8 @@ def _warnungen(w, staende, nm, alt=None):
         hat_ziel = _num(e.get("ziel"))
         basis = e["ziel"] if hat_ziel else e.get("zufriedenheit")
         if d < 0 and _num(basis) and basis + d < ZUFRIEDEN_MIN:
-            out.append(f"{e['name']}: {'Zielzufriedenheit' if hat_ziel else 'Zufriedenheit (Ziel unbekannt)'} {_pz(basis, 1)} → "
-                       f"{_pz(basis + d, 1)} (unter {_pz(ZUFRIEDEN_MIN, 0)})")
+            out.append(ue(t"{e['name']}: {ue('Zielzufriedenheit') if hat_ziel else ue('Zufriedenheit (Ziel unbekannt)')} {_pz(basis, 1)} → "
+                       t"{_pz(basis + d, 1)} (unter {_pz(ZUFRIEDEN_MIN, 0)})"))
     return out
 
 
@@ -1235,8 +1236,8 @@ def _macht_warnung(w, e):
     m = e.get("macht")
     x = next((x for x in w if x[0] == f"global_{e['stand']}_power" and _num(x[5]) and x[5] > 0), None)
     if x and _num(m) and m >= MACHT_MAX:
-        return [f"{e['name']}: Macht schon {_pz(m, 1)} – {x[1]} {x[2]} hebt sie weiter (Regel des Ratgebers: ab "
-                f"{_pz(MACHT_MAX, 0)} nur mit Hinweis)"]
+        return [ue(t"{e['name']}: Macht schon {_pz(m, 1)} – {x[1]} {x[2]} hebt sie weiter (Regel des Ratgebers: ab "
+                t"{_pz(MACHT_MAX, 0)} nur mit Hinweis)")]
     return []
 
 
@@ -1263,7 +1264,7 @@ def _staende_waehlbar(en, staende):
 
 # Bedingungen eines Provinz-Ziels, die nur Doppelbelegung ausschließen – übergangen (prüft das Spiel)
 DOPPELT = {"cabinet_already_performing_same_task_on_target", "cabinet_control_area_action_covers_province"}
-ORT_FELD = {"prosperity": "Wohlstand", "local_control": "Kontrolle"}
+ORT_FELD = {"prosperity": ue("Wohlstand"), "local_control": ue("Kontrolle")}
 
 
 def _provinzen(last, mod_orte):
@@ -1346,12 +1347,12 @@ def _ziel_text(bloecke):
                     if m and _num(vv):
                         xs.append(f"{ORT_FELD[m.group(1)]} {m.group(2)} {_pz(vv, 0) if m.group(1) == 'local_control' else _de(vv)}")
                     elif kk == "is_capital":
-                        xs.append("Hauptstadt" if vv == "yes" else "nicht Hauptstadt")
+                        xs.append(ue("Hauptstadt") if vv == "yes" else ue("nicht Hauptstadt"))
                 if xs:
-                    teile.append(("alle unsere Orte" if v.get("count") == "all" else "ein Ort") + " mit " + ", ".join(xs))
+                    teile.append((ue("alle unsere Orte") if v.get("count") == "all" else ue("ein Ort")) + ue(" mit ") + ", ".join(xs))
             m = re.match(r"^province_average_control(>=|<=|>|<)$", k)
             if m and _num(v):
-                teile.append(f"Kontrolle im Schnitt {m.group(1)} {_pz(v, 0)}")
+                teile.append(ue(t"Kontrolle im Schnitt {m.group(1)} {_pz(v, 0)}"))
     return "; ".join(dict.fromkeys(teile))
 
 
@@ -1375,16 +1376,16 @@ def _ziel_knoten(P, e, staende, provinzen=None, nm=None):
         nm = nm or (lambda k: k)
         if passt:
             namen = ", ".join(nm(p) for p in passt[:4]) + (" …" if len(passt) > 4 else "")
-            return [P.k(f"Eine unserer Provinzen ist als Ziel wählbar{f' ({text})' if text else ''}: {namen}", True)]
+            return [P.k(ue(t"Eine unserer Provinzen ist als Ziel wählbar{f' ({text})' if text else ''}: {namen}"), True)]
         if not offen:
-            return [P.k(f"Keine unserer Provinzen ist als Ziel wählbar{f' – verlangt: {text}' if text else ''} (select_trigger)",
+            return [P.k(ue(t"Keine unserer Provinzen ist als Ziel wählbar{ue(t' – verlangt: {text}') if text else ''} (select_trigger)"),
                         False)]
     if e["zt"] == ["estate"]:
         ok = _staende_waehlbar(e.get("z_en"), staende)
         if ok is not None:
-            return [P.k("Ein Stand ist als Ziel wählbar (select_trigger enabled)" + (f": {', '.join(s['name'] for s in ok)}" if ok else
-                                                                                   " – keiner erfüllt die Bedingung"), bool(ok))]
-    return [P.k(f"Passendes Ziel ({', '.join(e.get('ziel') or e['zt'])}) vorhanden (select_trigger) – prüft das Spiel", None)]
+            return [P.k(ue("Ein Stand ist als Ziel wählbar (select_trigger enabled)") + (f": {', '.join(s['name'] for s in ok)}" if ok else
+                                                                                   ue(" – keiner erfüllt die Bedingung")), bool(ok))]
+    return [P.k(ue(t"Passendes Ziel ({', '.join(e.get('ziel') or e['zt'])}) vorhanden (select_trigger) – prüft das Spiel"), None)]
 
 
 def buendnis_vorschlag(gut, frei_kap=None):
@@ -1393,20 +1394,20 @@ def buendnis_vorschlag(gut, frei_kap=None):
     von uns unter 0 liegt -> „Beziehungen verbessern“ (ein Diplomat hebt ihre Meinung; unsere Meinung von ihnen hebt er nicht)."""
     for k in gut:
         if k["ok"] is True and (k["unterhalt"] is None or frei_kap is None or k["unterhalt"] <= frei_kap):
-            return {"text": f"Bündnis mit {k['name']} anbieten",
-                    "warum": f"Stärke {_de(k['staerke'], 1) if _num(k['staerke']) else '?'}"
-                             + (f" = {_pz(k['gewinn'], 0)} unseres Verteidigungsbündnisses" if _num(k["gewinn"]) else "")
-                             + ("; sie haben einen Kriegsgrund gegen uns – ein Bündnis verbietet den Krieg" if k["schutz"] else ""),
-                    "kosten": f"Diplomatiekapazität ≈ {_de(k['unterhalt'])} von {_de(frei_kap)} frei"
+            return {"text": ue(t"Bündnis mit {k['name']} anbieten"),
+                    "warum": ue(t"Stärke {_de(k['staerke'], 1) if _num(k['staerke']) else '?'}")
+                             + (ue(t" = {_pz(k['gewinn'], 0)} unseres Verteidigungsbündnisses") if _num(k["gewinn"]) else "")
+                             + (ue("; sie haben einen Kriegsgrund gegen uns – ein Bündnis verbietet den Krieg") if k["schutz"] else ""),
+                    "kosten": ue(t"Diplomatiekapazität ≈ {_de(k['unterhalt'])} von {_de(frei_kap)} frei")
                     if _num(k["unterhalt"]) and _num(frei_kap) else None, "tag": k["tag"], "name": k["name"], "art": "anbieten"}
     for k in gut:
         falsch = [x for x in k["bedingungen"] if x["ok"] is False]
-        if any(x["text"].startswith("Ihre Meinung") for x in falsch) and all(x["text"].startswith("Ihre Meinung") or x.get("krieg")
+        if any(x["text"].startswith(ue("Ihre Meinung")) for x in falsch) and all(x["text"].startswith(ue("Ihre Meinung")) or x.get("krieg")
                                                                               for x in falsch):
-            return {"text": f"Beziehungen zu {k['name']} verbessern (Diplomat)",
-                    "warum": "für ein Bündnis muss die Meinung auf beiden Seiten mindestens 0 sein (alliance_can_exist) – "
-                             + "; ".join(f"{x['text']}: jetzt {x['ist']}" for x in falsch if x.get("ist"))
-                             + (f"; Stärke {_de(k['staerke'], 1)} = {_pz(k['gewinn'], 0)} unseres Verteidigungsbündnisses"
+            return {"text": ue(t"Beziehungen zu {k['name']} verbessern (Diplomat)"),
+                    "warum": ue("für ein Bündnis muss die Meinung auf beiden Seiten mindestens 0 sein (alliance_can_exist) – ")
+                             + "; ".join(ue(t"{x['text']}: jetzt {x['ist']}") for x in falsch if x.get("ist"))
+                             + (ue(t"; Stärke {_de(k['staerke'], 1)} = {_pz(k['gewinn'], 0)} unseres Verteidigungsbündnisses")
                                 if _num(k["staerke"]) and _num(k["gewinn"]) else ""),
                     "kosten": None, "tag": k["tag"], "art": "verbessern"}
     return None
@@ -1437,25 +1438,25 @@ def _diplomatie(S, last, F, L, live, nb, gr, nm, P):
             fern.append({"tag": t, "name": d.get("name") or nm(t), "beziehungen": sorted(bez), "staerke": d.get("country_strength")})
             continue
         o_sie, o_wir = d.get("op_them"), d.get("op_us")
-        bed = [{"text": "Ihre Meinung von uns mindestens 0", "ok": None if not _num(o_sie) else o_sie >= 0,
+        bed = [{"text": ue("Ihre Meinung von uns mindestens 0"), "ok": None if not _num(o_sie) else o_sie >= 0,
                 "ist": _de(o_sie, 0) if _num(o_sie) else None},
-               {"text": "Unsere Meinung von ihnen mindestens 0", "ok": None if not _num(o_wir) else o_wir >= 0,
+               {"text": ue("Unsere Meinung von ihnen mindestens 0"), "ok": None if not _num(o_wir) else o_wir >= 0,
                 "ist": _de(o_wir, 0) if _num(o_wir) else None},
-               {"text": "Nicht unser Rivale", "ok": "rivale" not in bez},
-               {"text": "Wir sind nicht im Krieg (block_when_at_war)", "ok": None if krieg is None else not krieg, "krieg": True}]
+               {"text": ue("Nicht unser Rivale"), "ok": "rivale" not in bez},
+               {"text": ue("Wir sind nicht im Krieg (block_when_at_war)"), "ok": None if krieg is None else not krieg, "krieg": True}]
         ok = gruendung._und([x["ok"] for x in bed])
         stark = d.get("country_strength") if _num(d.get("country_strength")) else (nbl.get(t) or {}).get("werte", {}).get("country_strength")
         verteid = wir.get("defensive_alliance_strength")
         gewinn = stark / verteid if _num(stark) and _num(verteid) and verteid > 0 else None
         nicht = []
         if "rivale" in bez:
-            nicht.append("unser Rivale – Rivalen nehmen keine freundschaftlichen Verträge an (Spielbegriff Rivale)")
+            nicht.append(ue("unser Rivale – Rivalen nehmen keine freundschaftlichen Verträge an (Spielbegriff Rivale)"))
         if t in gruendung_orte:
-            nicht.append(f"besitzt Orte für die Gründung von {', '.join(sorted(set(gruendung_orte[t])))} – ein Bündnis verbietet den Krieg "
-                         "(scripted_relations alliance: disallow_war = yes)")
+            nicht.append(ue(t"besitzt Orte für die Gründung von {', '.join(sorted(set(gruendung_orte[t])))} – ein Bündnis verbietet den Krieg "
+                         t"(scripted_relations alliance: disallow_war = yes)"))
         amp = ((nbl.get(t) or {}).get("bewertung") or {}).get("stufe")
         if amp in ("gruen", "gelb") and "kb_ziel" in bez:
-            nicht.append(f"Kriegsgelegenheit laut Kachel Nachbarn (Ampel {'grün' if amp == 'gruen' else 'gelb'}) – ein Bündnis verbietet den Krieg")
+            nicht.append(ue(t"Kriegsgelegenheit laut Kachel Nachbarn (Ampel {ue('grün') if amp == 'gruen' else ue('gelb')}) – ein Bündnis verbietet den Krieg"))
         u, u_teile = unterhalt(R, eco_wir, (live.get("fremd_eco") or {}).get(t), o_sie, "grossmacht" in bez)
         kandidaten.append({"tag": t, "name": d.get("name") or nm(t), "beziehungen": sorted(bez), "bedingungen": bed, "ok": ok,
                            "staerke": stark, "gewinn": gewinn, "schutz": "kb_gegen_uns" in bez, "meinung_sie": o_sie,
@@ -1487,9 +1488,9 @@ def _diplomatie(S, last, F, L, live, nb, gr, nm, P):
     rk.sort(key=lambda x: (not x["kb_gegen_uns"], x["meinung_sie"] if _num(x["meinung_sie"]) else 0, x["name"]))
     rv = None
     if _num(n_riv) and _num(n_mog) and n_riv < n_mog and rk:
-        rv = {"text": f"„{rk[0]['name']}“ als Rivalen wählen", "warum": ("hat einen Kriegsgrund gegen uns" if rk[0]["kb_gegen_uns"] else
-                                                                  f"ihre Meinung von uns {_de(rk[0]['meinung_sie'], 0)}")
-              + f"; frei: {_de(n_mog - n_riv, 0)} von {_de(n_mog, 0)} Rivalenplätzen"}
+        rv = {"text": ue(t"„{rk[0]['name']}“ als Rivalen wählen"), "warum": (ue("hat einen Kriegsgrund gegen uns") if rk[0]["kb_gegen_uns"] else
+                                                                  ue(t"ihre Meinung von uns {_de(rk[0]['meinung_sie'], 0)}"))
+              + ue(t"; frei: {_de(n_mog - n_riv, 0)} von {_de(n_mog, 0)} Rivalenplätzen")}
     # Beziehungsverbesserungen (Spielstand)
     bv_laufend = [{"seit": r.get("start_date"), "automatisch": r.get("automation_initiated") == "yes"}
                   for r in (last.get("roh") or {}).get("beziehungen") or [] if r.get("art") == "opinion_improvement"

@@ -17,6 +17,7 @@ from . import techbaum                       # Ansicht Fortschritte (30.10.): Vo
 from . import gruendung                      # Kachel Ländergründung (30.10.)
 from . import startstrategie                 # Kachel Startstrategie (31.10.)
 from .savefile import SaveFile
+from .sprache import ue
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS momentaufnahmen (
@@ -191,10 +192,10 @@ def ingest(db, path, names, log=print, lock=None, force=False):
                                (pid, datum, SNAPSHOT_FORMAT)).fetchone() if pid else None
     s = None
     if not is_text_save(path):
-        msg = "binär - übersprungen (Startoption -force_text_save fehlt?)"
+        msg = ue("binär - übersprungen (Startoption -force_text_save fehlt?)")
     elif known and not force:
         # Autosaves rotieren per Umbenennen - derselbe Stand ist schon eingelesen
-        msg = f"{known[0]} {datum} schon vorhanden"
+        msg = ue(t"{known[0]} {datum} schon vorhanden")
     else:
         t0 = time.time()
         sv = SaveFile(path)
@@ -202,7 +203,7 @@ def ingest(db, path, names, log=print, lock=None, force=False):
         # kosteten 36 s und 9 MB je Spielstand (gemessen 02.10.)
         s = snapshot.build(sv, names, fremde=lambda tag: fremde.get(tag, []))
         m = s["meta"]
-        msg = f"{m['land']} {m['datum']} ({time.time() - t0:.0f} s)"
+        msg = ue(t"{m['land']} {m['datum']} ({time.time() - t0:.0f} s)")
     with guard:
         if s is not None:
             store_location_list(db, sv)
@@ -457,7 +458,7 @@ def live_alles(db, tag):
         if "bereich" in e:                     # Format ab 0.12: RG1I <art> <id> <feld> <Text>
             t = e.get("text", "")
             if e.get("gekuerzt"):              # 1.4: Logeintrag nach 1.024 Byte abgeschnitten (livelog.GEKUERZT)
-                t += "\n… (vom Spiel gekürzt: 1.4 schreibt höchstens 1.024 Byte je Logeintrag)"
+                t += ue("\n… (vom Spiel gekürzt: 1.4 schreibt höchstens 1.024 Byte je Logeintrag)")
             texte.setdefault(e["bereich"], {}).setdefault(str(e["id"]), {})[e["feld"]] = t
     return {"werte": werte, "texte": texte, "datum": datum}
 
@@ -727,7 +728,7 @@ def _kosten_text(k, v, names=None):
     z = f"{v:g}".replace(".", sprache.KOMMA)
     if k.startswith("scaled_"):
         n = names(k[7:]) if names else k[7:]
-        return f"{n} ({'mit dem Einkommen ' if k == 'scaled_gold' else ''}skaliert, Faktor {z})"
+        return ue(t"{n} ({ue('mit dem Einkommen ') if k == 'scaled_gold' else ''}skaliert, Faktor {z})")
     return f"{names(k) if names else k} {z}"
 
 
@@ -795,8 +796,8 @@ def krankheiten_wissen(voll, names=None):
             werte = mods((sm.get(m) or {}).get("def"))
             if e["sizes"]:
                 s = json.dumps(e["sizes"])
-                basis = ("Monatseinkommen" if "monthly_income_total" in s else "Kontrolle des Orts" if "local_control" in s
-                         else "Größe laut Spieldatei")
+                basis = (ue("Monatseinkommen") if "monthly_income_total" in s else ue("Kontrolle des Orts") if "local_control" in s
+                         else ue("Größe laut Spieldatei"))
                 f = [str(x).replace(".", sprache.KOMMA) for x in sorted({round(x, 4) for z in e["sizes"] for x in faktoren(z)})]
                 skal = basis + (f" × {f[0]}" if len(f) == 1 else f" × {f[0]}–{f[-1]}" if f else "")
                 for w in werte:
@@ -826,10 +827,10 @@ def krankheiten_wissen(voll, names=None):
                          "wirkung": wirkung(d.get("effect"))})
     pest_aktion = next((a["name"] for a in aktionen
                         if any(w.get("key") == "enable_pest_house" for m in a["wirkung"] for w in m["werte"])), None)
-    bedingung = {"pest_house": "nur während des Schwarzen Tods und erst nach der Aktion "
-                               + (f"„{pest_aktion}“" if pest_aktion else "mit „Pesthaus möglich“") + "; wird danach entfernt",
-                 "hospital": "Fortschritt " + ((_voll(voll, "advances").get("hospital_advance") or {}).get("name") or "hospital_advance")
-                             + ", Ort mit Entwicklung ab 20"}
+    bedingung = {"pest_house": ue("nur während des Schwarzen Tods und erst nach der Aktion ")
+                               + (ue(t"„{pest_aktion}“") if pest_aktion else ue("mit „Pesthaus möglich“")) + ue("; wird danach entfernt"),
+                 "hospital": ue("Fortschritt ") + ((_voll(voll, "advances").get("hospital_advance") or {}).get("name") or "hospital_advance")
+                             + ue(", Ort mit Entwicklung ab 20")}
     gebaeude = [{"key": k, "name": (bt.get(k) or {}).get("name") or k, "beschreibung": (bt.get(k) or {}).get("beschreibung"),
                  "bedingung": bedingung[k], "wirkung": mods(((bt.get(k) or {}).get("def") or {}).get("modifier"))}
                 for k in ("pest_house", "hospital") if k in bt]
@@ -849,7 +850,7 @@ def forschung_info(db, last, names=None, voll=None):
         a = adv.get(k) or {}
         age = (a.get("def") or {}).get("age") or ""
         je.setdefault(age, []).append(a.get("name") or (names(k) if names else k))
-    zeitalter = [{"key": a, "name": (ages.get(a) or {}).get("name") or a or "ohne Zeitalter", "fortschritte": sorted(je[a])}
+    zeitalter = [{"key": a, "name": (ages.get(a) or {}).get("name") or a or ue("ohne Zeitalter"), "fortschritte": sorted(je[a])}
                  for a in [*ages, *[x for x in je if x not in ages]] if a in je]
     keys = location_keys(db)
     eingefuehrt = set(L.get("institutions") or {})
@@ -982,8 +983,8 @@ def series(db, pid, names=None, wis=None, voll=None):
 
 
 # Regler im Wirtschaftsfenster (Mod-Monatszeile slider_<art>)
-REGLER_NAMEN = {"court": "Hof", "diplomatic": "Diplomatie", "army": "Heer", "navy": "Flotte", "fort": "Festungen",
-                "cultural": "Kultur", "colonial": "Kolonien", "exploration": "Erkundung", "food": "Nahrung", "upkeep": "Unterhalt"}
+REGLER_NAMEN = {"court": ue("Hof"), "diplomatic": ue("Diplomatie"), "army": ue("Heer"), "navy": ue("Flotte"), "fort": ue("Festungen"),
+                "cultural": ue("Kultur"), "colonial": ue("Kolonien"), "exploration": ue("Erkundung"), "food": ue("Nahrung"), "upkeep": ue("Unterhalt")}
 
 
 def aenderungen(snaps, lv, names=None):
@@ -1007,9 +1008,9 @@ def aenderungen(snaps, lv, names=None):
         pa, pb = set(a.get("privilegien") or []), set(b.get("privilegien") or [])
         if pa and pb:
             for k in sorted(pb - pa):
-                ev(bis, "Privileg", f"Privileg vergeben: {nm(k)}", von)
+                ev(bis, "Privileg", ue(t"Privileg vergeben: {nm(k)}"), von)
             for k in sorted(pa - pb):
-                ev(bis, "Privileg", f"Privileg entzogen: {nm(k)}", von)
+                ev(bis, "Privileg", ue(t"Privileg entzogen: {nm(k)}"), von)
         ga, gb = a.get("gesetze") or {}, b.get("gesetze") or {}
         if ga and gb:
             for k in sorted(set(ga) | set(gb)):
@@ -1018,14 +1019,14 @@ def aenderungen(snaps, lv, names=None):
         ra, rb = set(a.get("reformen") or []), set(b.get("reformen") or [])
         if ra and rb:
             for k in sorted(rb - ra):
-                ev(bis, "Reform", f"Reform eingeführt: {nm(k)}", von)
+                ev(bis, "Reform", ue(t"Reform eingeführt: {nm(k)}"), von)
             for k in sorted(ra - rb):
-                ev(bis, "Reform", f"Reform abgeschafft: {nm(k)}", von)
+                ev(bis, "Reform", ue(t"Reform abgeschafft: {nm(k)}"), von)
         ka = {(k.get("platz"), k.get("aktion"), k.get("seit")) for k in (a.get("kabinett") or [])}
         for k in b.get("kabinett") or []:
             if (k.get("platz"), k.get("aktion"), k.get("seit")) not in ka and k.get("seit"):
                 ziel = ", ".join(str(v) for v in (k.get("ziele") or {}).values() if not re.match(r"^\w+:\d+$", str(v)))
-                text = f"Kabinett: {k.get('aktion_name') or nm(k.get('aktion'))}"
+                text = ue(t"Kabinett: {k.get('aktion_name') or nm(k.get('aktion'))}")
                 if ziel:
                     text += f" ({ziel})"
                 if k.get("person"):
@@ -1037,19 +1038,19 @@ def aenderungen(snaps, lv, names=None):
             ga, gb = {g["id"]: g for g in a["gebaeude"]}, {g["id"]: g for g in b["gebaeude"]}
             def wo(i, g):
                 g = jetzt.get(i, g)
-                return f"{g.get('name') or nm(g.get('typ'))} in {g.get('ort')}"
+                return ue(t"{g.get('name') or nm(g.get('typ'))} in {g.get('ort')}")
             for i, g in gb.items():
                 x, y = (ga[i].get("stufe") if i in ga else None), g.get("stufe")
                 if i not in ga:
-                    ev(bis, "Gebäude", f"{wo(i, g)} {'gebaut (Stufe ' + str(y) + ')' if y else 'Bau begonnen'}", von)
+                    ev(bis, "Gebäude", f"{wo(i, g)} {ue('gebaut (Stufe ') + str(y) + ')' if y else ue('Bau begonnen')}", von)
                 elif (x or 0) != (y or 0):
-                    ev(bis, "Gebäude", f"{wo(i, g)} {'fertig (Stufe ' + str(y) + ')' if not x else 'ausgebaut' if (y or 0) > x else 'zurückgestuft'}"
-                       f"{f' (Stufe {x} → {y})' if x else ''}", von)
+                    ev(bis, "Gebäude", f"{wo(i, g)} {ue('fertig (Stufe ') + str(y) + ')' if not x else ue('ausgebaut') if (y or 0) > x else ue('zurückgestuft')}"
+                       f"{ue(t' (Stufe {x} → {y})') if x else ''}", von)
             for i, g in ga.items():
                 if i not in gb:
-                    ev(bis, "Gebäude", f"{wo(i, g)} abgerissen", von)
+                    ev(bis, "Gebäude", ue(t"{wo(i, g)} abgerissen"), von)
         if a.get("orte") and b.get("orte") and len(a["orte"]) != len(b["orte"]):
-            ev(bis, "Orte", f"Orte: {len(a['orte'])} → {len(b['orte'])}", von)
+            ev(bis, "Orte", ue(t"Orte: {len(a['orte'])} → {len(b['orte'])}"), von)
 
     # Monatswerte (Mod): genauer Monat
     prev = None
@@ -1059,18 +1060,18 @@ def aenderungen(snaps, lv, names=None):
             d = r["datum"]
             if isinstance(r.get("ruler_reign"), (int, float)) and isinstance(prev.get("ruler_reign"), (int, float)) \
                     and r["ruler_reign"] < prev["ruler_reign"]:
-                ev(d, "Herrscher", "Herrscherwechsel (Regierungszeit beginnt neu)")
+                ev(d, "Herrscher", ue("Herrscherwechsel (Regierungszeit beginnt neu)"))
             for k, n in REGLER_NAMEN.items():
                 x, y = prev.get("slider_" + k), r.get("slider_" + k)
                 if isinstance(x, (int, float)) and isinstance(y, (int, float)) and abs(y - x) >= 0.05:
-                    ev(d, "Regler", f"Regler {n}: {round(x * 100)} % → {round(y * 100)} %")
+                    ev(d, "Regler", ue(t"Regler {n}: {round(x * 100)} % → {round(y * 100)} %"))
             for k, n in (("privileges", None), ("reforms", "Reformen"), ("subjects", "Klientelländer"), ("rivals", "Rivalen")):
                 x, y = prev.get(k), r.get(k)
                 if isinstance(x, (int, float)) and isinstance(y, (int, float)) and x != y:
                     if k == "privileges":
                         priv_monate.append((jahr(d), d))
                     else:
-                        ev(d, n, f"{n}: {x:g} → {y:g}")
+                        ev(d, n, f"{ue(n)}: {x:g} → {y:g}")
         prev = r
     # Privilegien aus den Momentaufnahmen auf den Monat setzen, in dem sich die Anzahl geändert hat (falls im Zeitraum genau einer)
     for e in out:

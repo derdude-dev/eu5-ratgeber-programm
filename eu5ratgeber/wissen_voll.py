@@ -16,6 +16,7 @@ import re
 
 from . import gamedata, pdx, pfade
 from . import sprache
+from .sprache import ue
 
 GAME = gamedata.GAME_DIR
 SKIP = {"coat_of_arms", "ethnicities", "genes", "persistent_dna", "music_player_tracks", "flag_definitions",
@@ -123,7 +124,7 @@ def ensure(cache_dir, version, names=None, modifier_names=None, log=print):
     out = os.path.join(cache_dir, "spielwissen", re.sub(r"[^\w.-]", "_", f"{version}_f{FORMAT}{zusatz}"))
     typen = os.path.join(out, "_modifikator_typen.json")          # entsteht zuletzt: fehlt sie, brach der Bau ab
     if not (os.path.exists(os.path.join(out, "_index.json")) and os.path.exists(typen)):
-        log(f"Spielwissen (vollständig) wird gebaut: {out}")
+        log(ue(t"Spielwissen (vollständig) wird gebaut: {out}"))
         names = names or gamedata.Names()
         build(out, names, modifier_names)
         pfade.atomar_schreiben(typen, json.dumps(modifier_types(out, names), ensure_ascii=False).encode("utf-8"))

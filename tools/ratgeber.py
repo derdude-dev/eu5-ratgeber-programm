@@ -29,6 +29,7 @@ from eu5ratgeber import wiki  # noqa: E402  (Mechanik-Wiki, 30.10.)
 from eu5ratgeber import techbaum  # noqa: E402  (Ansicht Fortschritte, 30.10.)
 from eu5ratgeber import ingame  # noqa: E402  (Seitenleiste im Spiel, Mod 0.26, 02.11.)
 import waechter  # noqa: E402  (läuft das Spiel? – Hintergrundbetrieb, 03.11.)
+from eu5ratgeber.sprache import ue  # noqa: E402
 
 WISSEN_VOLL = None   # Ordner des vollständigen Spielwissens, gesetzt in main()
 _MODTYPES = None
@@ -75,7 +76,7 @@ class PortBelegt(Exception):
 
 
 def beenden(grund):
-    log(f"{grund} – Ratgeber wird beendet")
+    log(ue(t"{grund} – Ratgeber wird beendet"))
     with lock:                       # keine Datenbank-Schreibung mittendrin abbrechen
         SERVER.shutdown()
 
@@ -86,7 +87,7 @@ def tab_pruefen():
             return
     if (HINTERGRUND or pfade.eingefroren()) and waechter.spiel_laeuft():
         return                       # im Hintergrund und in der Exe endet der Ratgeber mit dem Spiel (spiel_pruefen)
-    beenden("Browser-Tab geschlossen")
+    beenden(ue("Browser-Tab geschlossen"))
 
 
 def spiel_pruefen():
@@ -108,10 +109,10 @@ def spiel_pruefen():
             offen = bool(TABS)
         dauer = time.monotonic() - weg
         if (not offen and dauer >= SPIEL_GNADE) or (HINTERGRUND and dauer >= TAB_HOECHSTENS):
-            ENDE_GRUND["text"] = "Spiel beendet" + (" (Browser-Tab noch offen)" if offen else "")
+            ENDE_GRUND["text"] = ue("Spiel beendet") + (ue(" (Browser-Tab noch offen)") if offen else "")
             ENDE.set()
             time.sleep(180)
-            beenden(ENDE_GRUND["text"] + " – Wächter-Faden antwortet nicht")
+            beenden(ENDE_GRUND["text"] + ue(" – Wächter-Faden antwortet nicht"))
             return
 
 
@@ -154,7 +155,7 @@ def browser_klick(recs, jetzt=None):
             if time.monotonic() - BROWSER["zuletzt"] < BROWSER_SPERRE:
                 return False
             BROWSER["zuletzt"] = time.monotonic()
-            log("Knopf „Im Browser öffnen“ im Spiel – Browser wird geöffnet")
+            log(ue("Knopf „Im Browser öffnen“ im Spiel – Browser wird geöffnet"))
             webbrowser.open(f"http://127.0.0.1:{PORT}")
             return True
     return False
@@ -174,7 +175,7 @@ def scan(db, names, stable):
         try:
             history.ingest(db, path, names, log, lock)    # Sperre nur um die Datenbankzugriffe
         except Exception as e:           # ein kaputter Stand soll den Wächter nicht stoppen
-            log(f"{os.path.basename(path)}: FEHLER {e}")
+            log(ue(t"{os.path.basename(path)}: FEHLER {e}"))
 
 
 def read_log(db, reader):
@@ -205,14 +206,14 @@ def _read_log_stueck(db, reader):
                 history.store_log(db, teil)
             time.sleep(0.01)                         # Sperre wirklich freigeben – sonst holt dieser Thread sie sofort wieder
         for z in (r for r in recs if r["art"] == "zeitsprung"):
-            log(f"debug.log: Spielstand neu geladen ({z['tag']} zurück auf {(z['ab'] - 1) // 12}.{(z['ab'] - 1) % 12 + 1}) – "
-                "spätere Monate verworfen")
+            log(ue(t"debug.log: Spielstand neu geladen ({z['tag']} zurück auf {(z['ab'] - 1) // 12}.{(z['ab'] - 1) % 12 + 1}) – "
+                t"spätere Monate verworfen"))
         last = next((r for r in reversed(recs) if "jahr" in r), recs[-1])
         n = {a: sum(r["art"] == a for r in recs) for a in ("land", "ort", "gebaeude", "markt", "diplomatie",
                                                             "finanzen", "stand_einkommen", "text")}
-        log(f"debug.log: {n['land']} Monat(e), {n['ort']} Orte, {n['gebaeude']} Gebäude, {n['markt']} Märkte, "
-            f"{n['diplomatie']} Diplomatie, {n['finanzen']} Finanzen, {n['stand_einkommen']} Stände-Einkommen, "
-            f"{n['text']} Texte - zuletzt {last['tag']} {last['jahr']}.{last['monat']}")
+        log(ue(t"debug.log: {n['land']} Monat(e), {n['ort']} Orte, {n['gebaeude']} Gebäude, {n['markt']} Märkte, "
+            t"{n['diplomatie']} Diplomatie, {n['finanzen']} Finanzen, {n['stand_einkommen']} Stände-Einkommen, "
+            t"{n['text']} Texte - zuletzt {last['tag']} {last['jahr']}.{last['monat']}"))
     return bool(recs)
 
 
@@ -229,11 +230,11 @@ def fremde_nachladen(db, names):
         for path in sorted(glob.glob(os.path.join(glob.escape(SAVES), "*.eu5")), key=os.path.getmtime, reverse=True):
             try:
                 if history.is_text_save(path) and history.peek_meta(path) == (pid, datum):
-                    log(f"fremde Märkte: {os.path.basename(path)} ({datum}) wird neu eingelesen")
+                    log(ue(t"fremde Märkte: {os.path.basename(path)} ({datum}) wird neu eingelesen"))
                     history.ingest(db, path, names, log, lock, force=True)
                     break
             except Exception as e:
-                log(f"{os.path.basename(path)}: FEHLER {e}")
+                log(ue(t"{os.path.basename(path)}: FEHLER {e}"))
 
 
 # Spiel-Update erkennen (24.10., Patch 1.4 am 28.10.): Steam-Build und die vom Mod überdeckte Spieldatei gegen den Stand
@@ -247,14 +248,14 @@ def pruefung_aktualisieren():
     try:
         neu = spielversion.pruefen()
     except Exception as e:                       # die Prüfung darf den Ratgeber nicht stoppen
-        neu = {"warnungen": [{"stufe": "mittel", "text": f"Prüfung Spiel/Mod gescheitert: {type(e).__name__}: {e}", "tun": ""}]}
+        neu = {"warnungen": [{"stufe": "mittel", "text": ue(t"Prüfung Spiel/Mod gescheitert: {type(e).__name__}: {e}"), "tun": ""}]}
     if INGAME["fehlversuche"] >= INGAME_GEDULD:
-        neu["warnungen"].append({"stufe": "hoch", "text": f"Die Texte für die Seitenleiste lassen sich nicht schreiben: {INGAME['fehler']}",
-                                 "tun": "Schreibrechte für den Ordner des Mods prüfen."})
+        neu["warnungen"].append({"stufe": "hoch", "text": ue(t"Die Texte für die Seitenleiste lassen sich nicht schreiben: {INGAME['fehler']}"),
+                                 "tun": ue("Schreibrechte für den Ordner des Mods prüfen.")})
     alt = {w["text"] for w in PRUEFUNG.get("warnungen", [])}
     for w in neu["warnungen"]:
         if w["text"] not in alt:
-            log(f"ACHTUNG: {w['text']}" + (f" – {w['tun']}" if w.get("tun") else ""))
+            log(ue(t"ACHTUNG: {w['text']}") + (f" – {w['tun']}" if w.get("tun") else ""))
     PRUEFUNG = neu
     return alt != {w["text"] for w in neu["warnungen"]}       # geändert -> Seitenleiste im Spiel neu schreiben
 
@@ -266,7 +267,7 @@ def browser_wenn_bereit(sekunden=180):
             webbrowser.open(f"http://127.0.0.1:{PORT}")
             return
         time.sleep(1)
-    log(f"Seite antwortet nach {sekunden} s nicht: http://127.0.0.1:{PORT}")
+    log(ue(t"Seite antwortet nach {sekunden} s nicht: http://127.0.0.1:{PORT}"))
 
 
 def ingame_schreiben(db, names, wis):
@@ -280,17 +281,20 @@ def ingame_schreiben(db, names, wis):
             d = ingame.daten(db, pid, names, wis, WISSEN_VOLL) if pid else None
         # Warnungen der Prüfung Spiel/Mod (Spiel-Update …) auch in der Übersicht im Spiel – das Konsolenfenster fehlt im
         # Hintergrundbetrieb (03.11.)
-        if d and ingame.schreiben(ingame.texte(d, pruef=PRUEFUNG.get("warnungen") or [])) and not INGAME["geschrieben"]:
-            log(f"Seitenleiste im Spiel: Texte geschrieben ({(d.get('meta') or {}).get('land')}, {ingame.LIVE_DATEI.name})")
+        warnungen = PRUEFUNG.get("warnungen") or []
+        if not d and warnungen:
+            ingame.schreiben(ingame.nur_hinweis(warnungen))
+        if d and ingame.schreiben(ingame.texte(d, pruef=warnungen)) and not INGAME["geschrieben"]:
+            log(ue(t"Seitenleiste im Spiel: Texte geschrieben ({(d.get('meta') or {}).get('land')}, {ingame.LIVE_DATEI.name})"))
             INGAME["geschrieben"] = True
         INGAME["fehlversuche"] = 0
     except OSError as e:                         # keine Schreibrechte im Workshop-Ordner, Datei gesperrt: auf der Seite melden
         INGAME["fehlversuche"] += 1
         INGAME["fehler"] = f"{type(e).__name__}: {e}"
         if INGAME["fehlversuche"] == INGAME_GEDULD:
-            log(f"Fenster im Spiel: FEHLER {INGAME['fehler']}")
+            log(ue(t"Fenster im Spiel: FEHLER {INGAME['fehler']}"))
     except Exception as e:                       # noqa: BLE001
-        log(f"Fenster im Spiel: FEHLER {type(e).__name__}: {e}")
+        log(ue(t"Fenster im Spiel: FEHLER {type(e).__name__}: {e}"))
 
 
 INGAME = {"geschrieben": False, "fehlversuche": 0, "fehler": ""}
@@ -333,7 +337,7 @@ def watcher(db, names, reader, wis=None):
                 fremde_nachladen(db, names)
                 naechster = time.monotonic() + POLL
         except Exception as e:                   # noqa: BLE001 – der Faden darf nicht still sterben (Prüfung 03.11.)
-            log(f"Wächter-Faden: FEHLER {type(e).__name__}: {e}")
+            log(ue(t"Wächter-Faden: FEHLER {type(e).__name__}: {e}"))
             time.sleep(POLL)
         time.sleep(LOG_TAKT)
 
@@ -405,26 +409,26 @@ def make_handler(db, names, wis):
                                          "already_percent": mt[k].get("already_percent") == "yes",
                                          "boolean": mt[k].get("boolean") == "yes"}
                                      for k in keys if k in mt}
-                return self.send(200 if d else 404, d or {"fehler": "Partie unbekannt"})
+                return self.send(200 if d else 404, d or {"fehler": ue("Partie unbekannt")})
             if u.path == "/api/roh":               # ab Format 4: alle Spielstand-Einträge zum Spielerland
                 with lock:
                     d = history.roh(db, q.get("partie", [""])[0])
-                return self.send(200 if d else 404, d or {"fehler": "Partie unbekannt"})
+                return self.send(200 if d else 404, d or {"fehler": ue("Partie unbekannt")})
             if u.path == "/api/daten":
                 with lock:
                     d = history.series(db, q.get("partie", [""])[0], names, wis, voll=WISSEN_VOLL)
-                return self.send(200 if d else 404, d or {"fehler": "Partie unbekannt"})
+                return self.send(200 if d else 404, d or {"fehler": ue("Partie unbekannt")})
             if u.path == "/api/bevoelkerung":      # Kachel Bevölkerung: Spielstand-Pops + Live-Werte/Texte
                 with lock:
                     d = bevoelkerung.build(db, q.get("partie", [""])[0], names, modtypes())
-                return self.send(200 if d else 404, d or {"fehler": "Partie unbekannt"})
+                return self.send(200 if d else 404, d or {"fehler": ue("Partie unbekannt")})
             if u.path == "/api/wissen":            # vollständiges Spielwissen je Ordner (data/spielwissen/…)
                 ordner = q.get("ordner", ["_index"])[0]
                 p = os.path.join(WISSEN_VOLL, os.path.basename(ordner) + ".json")
                 if os.path.exists(p):
                     with open(p, "rb") as f:
                         return self.send(200, f.read())
-                return self.send(404, {"fehler": "Ordner unbekannt"})
+                return self.send(404, {"fehler": ue("Ordner unbekannt")})
             if u.path == "/api/wiki":              # Mechanik-Wiki (30.10., eu5ratgeber/wiki.py): je Spielversion einmal gebaut
                 gz = "gzip" in self.headers.get("Accept-Encoding", "")
                 data = wiki.laden(WISSEN_VOLL, names.loc, modtypes(), wis["version"], log, gz=gz)
@@ -434,7 +438,7 @@ def make_handler(db, names, wis):
                 with lock:                                 # + Stand der Partie; ~3 MB, gepackt ~0,9 MB (gemessen 30.10.)
                     d = techbaum.api(db, q.get("partie", [""])[0], WISSEN_VOLL, names, wis)
                 if not d:
-                    return self.send(404, {"fehler": "Partie unbekannt"})
+                    return self.send(404, {"fehler": ue("Partie unbekannt")})
                 data = json.dumps(d, ensure_ascii=False).encode("utf-8")
                 if "gzip" in self.headers.get("Accept-Encoding", ""):
                     import gzip
@@ -445,7 +449,7 @@ def make_handler(db, names, wis):
             if u.path == "/api/namen":             # Anzeigenamen für Schlüssel (Lokalisierung)
                 keys = q.get("k", [""])[0].split(",")
                 return self.send(200, {k: names(k) for k in keys[:5000] if k})
-            self.send(404, {"fehler": "nicht gefunden"})
+            self.send(404, {"fehler": ue("nicht gefunden")})
 
         def do_POST(self):
             u = urlparse(self.path)
@@ -465,10 +469,10 @@ def make_handler(db, names, wis):
                     elif u.path == "/api/markierung/loeschen":
                         history.delete_mark(db, int(body["id"]))
                     else:
-                        return self.send(404, {"fehler": "nicht gefunden"})
+                        return self.send(404, {"fehler": ue("nicht gefunden")})
                 self.send(200, {"ok": True})
             except (KeyError, ValueError) as e:
-                self.send(400, {"fehler": f"ungültig: {e}"})
+                self.send(400, {"fehler": ue(t"ungültig: {e}")})
     return H
 
 
@@ -491,12 +495,12 @@ def main():
     # beide schrieben in dieselbe Datenbank, die Seite hing): läuft schon ein Ratgeber, nur den Browser öffnen
     sperre = sperre_belegen() if a.befehl == "start" else None
     if a.befehl == "start" and sperre is None:
-        log(f"Ratgeber läuft schon (oder lädt noch): http://127.0.0.1:{PORT} - kein zweiter Start")
+        log(ue(t"Ratgeber läuft schon (oder lädt noch): http://127.0.0.1:{PORT} - kein zweiter Start"))
         if a.browser:
             browser_wenn_bereit()
         return
     if a.befehl == "start" and laeuft_schon():
-        raise PortBelegt(f"Port {PORT} wird von einem anderen Programm benutzt, zum Beispiel AnkiConnect. Beende es und starte den Ratgeber neu.")
+        raise PortBelegt(ue(t"Port {PORT} wird von einem anderen Programm benutzt, zum Beispiel AnkiConnect. Beende es und starte den Ratgeber neu."))
     if a.hintergrund or not sys.stderr:
         os.makedirs(os.path.dirname(LOGDATEI), exist_ok=True)
         waechter.kuerzen(LOGDATEI, waechter.LOG_GRENZE)
@@ -505,20 +509,20 @@ def main():
     pruefung_aktualisieren()                     # vor dem Einlesen: Warnung steht oben im Konsolenfenster
     db = history.connect(DB_PATH)
     names = gamedata.Names()
-    log(f"Datenbank {DB_PATH}")
+    log(ue(t"Datenbank {DB_PATH}"))
     wis = wissen.load(DATEN, names)
-    log(f"Spielwissen {wis['version']}: {len(wis['gebaeude'])} Gebäude, {len(wis['gueter'])} Güter")
+    log(ue(t"Spielwissen {wis['version']}: {len(wis['gebaeude'])} Gebäude, {len(wis['gueter'])} Güter"))
     global WISSEN_VOLL
     WISSEN_VOLL = wissen_voll.ensure(DATEN, wis["version"], names, gamedata.modifikatoren(), log)
-    log(f"Spielwissen vollständig: {WISSEN_VOLL}")
+    log(ue(t"Spielwissen vollständig: {WISSEN_VOLL}"))
     reader = livelog.LogReader()
     if reader.fortsetzen(history.logstand_laden(db, reader.path)):
-        log(f"debug.log: weiter ab {reader.pos / 1e6:.0f} MB (Lesestand gespeichert, dieselbe Datei)")
+        log(ue(t"debug.log: weiter ab {reader.pos / 1e6:.0f} MB (Lesestand gespeichert, dieselbe Datei)"))
     if a.befehl == "einlesen":
         read_log(db, reader)
         scan(db, names, None)
         for p in history.partien(db):
-            log(f"Partie {p['name']} ({p['land']}): {p['anzahl']} Stände bis {p['bis']}")
+            log(ue(t"Partie {p['name']} ({p['land']}): {p['anzahl']} Stände bis {p['bis']}"))
         return
     # Webseite sofort, Einlesen im Hintergrund (viele neue Stände können Minuten dauern; ebenso eine lange debug.log – 31.10.:
     # 88 MB nach 19 Spielmonaten, die Seite kam erst nach Minuten, weil read_log vor dem Server lief)
@@ -528,13 +532,13 @@ def main():
     try:
         srv = SERVER = ThreadingHTTPServer(("127.0.0.1", PORT), make_handler(db, names, wis))
     except OSError as e:
-        log(f"Port {PORT} ist belegt ({e}) - läuft schon ein Ratgeber? Kein zweiter Start.")
+        log(ue(t"Port {PORT} ist belegt ({e}) - läuft schon ein Ratgeber? Kein zweiter Start."))
         return
     if HINTERGRUND:
-        log(f"Webseite: http://127.0.0.1:{PORT}  (im Hintergrund; Ende mit dem Spiel)")
+        log(ue(t"Webseite: http://127.0.0.1:{PORT}  (im Hintergrund; Ende mit dem Spiel)"))
         threading.Thread(target=spiel_pruefen, daemon=True).start()
     else:
-        log(f"Webseite: http://127.0.0.1:{PORT}  (Beenden mit Strg+C oder durch Schließen des Browser-Tabs)")
+        log(ue(t"Webseite: http://127.0.0.1:{PORT}  (Beenden mit Strg+C oder durch Schließen des Browser-Tabs)"))
         if pfade.eingefroren():
             threading.Thread(target=spiel_pruefen, daemon=True).start()
     if a.browser:

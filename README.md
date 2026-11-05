@@ -4,7 +4,7 @@ Strategieberater für Europa Universalis V. Das Programm liest deine laufende Pa
 
 Dieses Repo enthält das Programm. Die Seitenleiste kommt aus dem Mod EU5 Ratgeber im Steam Workshop. Ohne den Mod zeigt das Programm nur die Seite im Browser.
 
-**Stand:** in Entwicklung, noch nicht veröffentlicht. Nur Deutsch.
+**Stand:** in Entwicklung, noch nicht veröffentlicht. Seitenleiste auf Deutsch und Englisch, die Seite im Browser vorerst nur auf Deutsch.
 
 ## Wie es arbeitet
 
@@ -41,4 +41,4 @@ Kein offizielles Produkt von Paradox Interactive. Europa Universalis V ist eine 
 
 ## English
 
-A strategy advisor for Europa Universalis V. This repository holds the companion program for the EU5 Ratgeber mod. German only for now, an English version is planned. MIT license.
+A strategy advisor for Europa Universalis V. This repository holds the companion program for the EU5 Ratgeber mod. The in-game panel is available in German and English, the browser page is in German for now. MIT license.

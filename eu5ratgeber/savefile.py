@@ -15,6 +15,7 @@ import re
 import time
 
 from . import pdx
+from .sprache import ue
 
 INDEX_DEPTH = 3
 SCAN = re.compile(rb'"(?:[^"\\]|\\.)*"|[{}]')
@@ -31,7 +32,7 @@ class SaveFile:
         self.header = self.data[:nl].decode("ascii", "replace")
         # Kopf: SAV02 + 10 Zeichen + Format (0004 = Text, 0006 = binär gepackt) + ...
         if self.header[15:19] != "0004":
-            raise ValueError(f"Kein Text-Spielstand (Kopf {self.header}) - Startoption -force_text_save setzen")
+            raise ValueError(ue(t"Kein Text-Spielstand (Kopf {self.header}) - Startoption -force_text_save setzen"))
         self.blocks = {}     # "a/b/c" -> (start, end) ; start = Position von '{', end = nach '}'
         self.children = {}   # "a/b"   -> [(key, start, end), ...]
         self._index(nl + 1)
@@ -65,7 +66,7 @@ class SaveFile:
                         self.blocks[path] = (s, end)
             # Zeichenketten: nichts zu tun, sie sind als Ganzes übersprungen
         if depth != 0:
-            raise ValueError(f"Klammern gehen nicht auf (Tiefe {depth} am Dateiende)")
+            raise ValueError(ue(t"Klammern gehen nicht auf (Tiefe {depth} am Dateiende)"))
 
     # --- Zugriff -------------------------------------------------------------------------
 

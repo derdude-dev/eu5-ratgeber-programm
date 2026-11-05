@@ -69,8 +69,8 @@ SYMBOL = {"kabinett": "government", "minister": "government", "politlinie": "gov
           "Wirtschaft": "economy", "Produktion": "production", "Finanzen": "economy", "Handel": "economy", "Forschung": "other",
           "Militär": "expansion", "Krieg": "expansion", "Diplomatie": "country", "Nachbarn": "country", "Gründung": "expansion",
           "Kultur": "society", "Religion": "society"}
-BEREICH = {"kabinett": "Kabinett", "forschung": "Forschung", "politlinie": "Politlinie", "privileg": "Privileg", "bau": "Bau",
-           "buendnis": "Bündnis", "reform": "Reform", "rivale": "Rivale", "minister": "Minister"}
+BEREICH = {"kabinett": ue("Kabinett"), "forschung": ue("Forschung"), "politlinie": ue("Politlinie"), "privileg": ue("Privileg"), "bau": ue("Bau"),
+           "buendnis": ue("Bündnis"), "reform": ue("Reform"), "rivale": ue("Rivale"), "minister": ue("Minister")}
 FOKUSSE = list(wirtschaftsplan.FOKUS)
 # Karte: Zeile, Kostenmarke, Tooltip, Bereich (Symbol); ab 0.28 Link: Typ, Ziel, Ort (Baumodus)
 TEILE = ("", "K", "T", "I", "L", "Z", "O")
@@ -109,11 +109,24 @@ def alle_schluessel():
 def leer():
     """Alle Schlüssel mit Platzhaltern – bis zur ersten Rechnung des Ratgebers (Mod-Bau)."""
     t = {k: "" for k in alle_schluessel()}
+    # Wer den Mod nur abonniert hat, sieht dies: Ohne Programm entstehen keine Texte (Nutzer 05.11.: erklären statt nur „keine Daten“)
+    einrichten = ue("Noch keine Daten. Der Ratgeber braucht sein Programm und einen Spielstand. Einmal einrichten:\\n"
+                    "1. In Steam die Startoption -force_text_save eintragen.\\n"
+                    "2. Programm EU5 Ratgeber laden (Link auf der Workshop-Seite), entpacken und starten. Beim Autostart „Ja“ wählen.\\n"
+                    "3. Spiel neu starten, einen Spielstand laden oder speichern und „Aktualisieren“ drücken.")
     for fk in FOKUSSE + [""]:
-        # seit 03.11. startet der Wächter den Ratgeber mit dem Spiel (tools/waechter.py); die .bat nur noch von Hand
-        t[f"RG_RATGEBER_LEER_{fk}"] = ("Noch keine Daten. Das Programm EU5 Ratgeber muss laufen und braucht einen Spielstand "
-                                       "(Startoption -force_text_save). Danach „Aktualisieren“.")
-    t["RG_RATGEBER_STAND"] = "EU5 Ratgeber – Daten-Mod"
+        t[f"RG_RATGEBER_LEER_{fk}"] = einrichten
+    t["RG_RATGEBER_STAND"] = ue("EU5 Ratgeber – Daten-Mod")
+    return t
+
+
+def nur_hinweis(warnungen):
+    """Texte ohne eingelesene Partie: Die Warnungen stehen an der Stelle des Einrichtungs-Hinweises, zum Beispiel wenn das Spielstand-Format
+    nicht stimmt. Sonst sähe man nur, dass nichts kommt."""
+    t = leer()
+    text = "\\n".join(loc(w["text"] + (f" {w['tun']}" if w.get("tun") else "")) for w in warnungen)
+    for fk in FOKUSSE + [""]:
+        t[f"RG_RATGEBER_LEER_{fk}"] = text
     return t
 
 
@@ -186,7 +199,7 @@ def _marke(kosten, sparen):
     """Kurze Kostenmarke aus dem Kostentext der ersten Schritte („20 Politischer Einfluss – danach 80 übrig“ -> „20 Einfluss“)."""
     if not kosten:
         return ""
-    m = loc(kosten.split(" – ")[0].split(";")[0].replace("Politischer Einfluss", "Einfluss"))
+    m = loc(kosten.split(" – ")[0].split(";")[0].replace(ue("Politischer Einfluss"), ue("Einfluss")))
     return f"#R {m}#!" if sparen else m
 
 
@@ -202,8 +215,8 @@ def _schritte(t, fk, S, F, d=None):
         sy = ingame_kacheln.geb_sym(link["z"]) if link and link["typ"] == "bau" else ""
         _setze(t, f"S{i}", fk, f"#bold {loc(b)}:#! {loc(sy + str(e.get('text') or ''))}", _marke(e.get("kosten"), e.get("sparen")),
                tips.schritt(f"{b}: {e.get('text')}", e.get("warum"), e.get("kosten")), e.get("bereich"), link)
-    t[f"RG_RATGEBER_LEER_{fk}"] = (f"Startstrategie: {loc(S['fehler'])}" if S.get("fehler") else
-                                   "" if xs else "Nichts zu ändern – alle Einstellungen passen zum Schwerpunkt.")
+    t[f"RG_RATGEBER_LEER_{fk}"] = (ue(t"Startstrategie: {loc(S['fehler'])}") if S.get("fehler") else
+                                   "" if xs else ue("Nichts zu ändern – alle Einstellungen passen zum Schwerpunkt."))
 
 
 def _empfehlung_texte(r, fk=None):
@@ -226,8 +239,8 @@ def _empfehlungen(t, fk, d):
             continue
         z, m, tip = _empfehlung_texte(r, fk)
         _setze(t, f"E{i}", fk, z, m, tip, r.get("bereich"), ingame_kacheln.empf_link(r))
-    t[f"RG_RATGEBER_MEHR_{fk}"] = (f"… {len(E) - EMPFEHLUNGEN} weitere auf der Seite des Ratgebers" if len(E) > EMPFEHLUNGEN
-                                   else "" if E else "Keine Empfehlungen für diesen Schwerpunkt.")
+    t[f"RG_RATGEBER_MEHR_{fk}"] = (ue(t"… {len(E) - EMPFEHLUNGEN} weitere auf der Seite des Ratgebers") if len(E) > EMPFEHLUNGEN
+                                   else "" if E else ue("Keine Empfehlungen für diesen Schwerpunkt."))
 
 
 def _tabelle(S, F):
@@ -243,13 +256,13 @@ def _tabelle(S, F):
     z = []
     for s in F.get("kabinett") or []:
         j = s.get("jetzt") or {}
-        jetzt = ik.kab_sym(j.get("aktion")) + (j.get("aktion_name") or (K.get(j.get("aktion")) or {}).get("n") or "frei")
-        vor = ("behalten" if not s.get("abweichung") else
+        jetzt = ik.kab_sym(j.get("aktion")) + (j.get("aktion_name") or (K.get(j.get("aktion")) or {}).get("n") or ue("frei"))
+        vor = (ue("behalten") if not s.get("abweichung") else
                ik.kab_sym(s.get("vorschlag")) + str((K.get(s.get("vorschlag")) or {}).get("n"))
-               if s.get("vorschlag") != j.get("aktion") else "Aktion behalten")
+               if s.get("vorschlag") != j.get("aktion") else ue("Aktion behalten"))
         if s.get("minister"):
-            vor = f"{vor}, Minister {s['minister']['name']}"
-        z.append((f"Kabinett {s['platz'] + 1 if isinstance(s.get('platz'), int) else 'neu'}", jetzt, vor,
+            vor = ue(t"{vor}, Minister {s['minister']['name']}")
+        z.append((ue(t"Kabinett {s['platz'] + 1 if isinstance(s.get('platz'), int) else ue('neu')}"), jetzt, vor,
                   "; ".join((s.get("gruende") or [])[:2] + (s.get("warnungen") or [])[:1]) or s.get("grund") or "",
                   ik.ansicht("government")))
     for g in F.get("gesetze") or []:
@@ -261,22 +274,22 @@ def _tabelle(S, F):
                       ik.ansicht("laws")))
     for p in F.get("privilegien") or []:
         if p.get("vorschlag"):
-            z.append((f"{ik.stand_sym(p['stand'])}Privileg {(ST.get(p['stand']) or {}).get('name') or p['stand']}",
-                      f"{len((ST.get(p['stand']) or {}).get('gewaehrt') or [])} gewährt",
+            z.append((ue(t"{ik.stand_sym(p['stand'])}Privileg {(ST.get(p['stand']) or {}).get('name') or p['stand']}"),
+                      ue(t"{len((ST.get(p['stand']) or {}).get('gewaehrt') or [])} gewährt"),
                       f"+ {(PK.get(p['vorschlag']) or {}).get('n') or p['vorschlag']}",
                       "; ".join(p.get("gruende", [])[:2] + p.get("warnungen", [])[:1]), ik.ansicht("government")))
     R = F.get("reform") or {}
     if R.get("abweichung"):
-        z.append(("Reform", f"{R.get('offen')} Platz frei", (RK.get(R.get("vorschlag")) or {}).get("n") or R.get("vorschlag"),
+        z.append((ue("Reform"), ue(t"{R.get('offen')} Platz frei"), (RK.get(R.get("vorschlag")) or {}).get("n") or R.get("vorschlag"),
                   "; ".join(R.get("gruende", [])[:2]), ik.ansicht("government_reforms")))
     rv = D.get("rivale_vorschlag")
     if rv:
         rk = (D.get("rivalen_kandidaten") or [{}])[0] or {}
-        z.append(("Rivale", f"{D.get('rivalen_zahl')} von {D.get('rivalen_moeglich')}", rv.get("text"), rv.get("warum") or "",
+        z.append((ue("Rivale"), ue(t"{D.get('rivalen_zahl')} von {D.get('rivalen_moeglich')}"), rv.get("text"), rv.get("warum") or "",
                   ik.land_link(rk.get("tag"), rk.get("name"))))
     bv = D.get("buendnis_vorschlag")
     if bv:
-        z.append(("Bündnis", ", ".join(D.get("verbuendete_namen") or []) or "keins", bv.get("text"), bv.get("warum") or "",
+        z.append((ue("Bündnis"), ", ".join(D.get("verbuendete_namen") or []) or ue("keins"), bv.get("text"), bv.get("warum") or "",
                   ik.land_link(bv.get("tag"))))
     return z[:ZEILEN]
 
@@ -290,13 +303,13 @@ def _kennzahlen(t, d):
     ST = ((d.get("startstrategie") or {}).get("privilegien") or {}).get("staende") or []
     sw = min((s for s in ST if isinstance(s.get("zufriedenheit"), (int, float))), key=lambda s: s["zufriedenheit"], default=None)
     lf = (d.get("techbaum_vorschlag") or {}).get("laufend") or {}
-    kz = [("Gold", "–" if g is None else f"{_de(g, 0)}" + ("" if dg is None else f" ({'#G' if dg >= 0 else '#R'} {'+' if dg >= 0 else ''}{_de(dg, 1)}#!)"),
-           "Gold laut Daten-Mod, in Klammern die Änderung zum Vormonat"),
-          ("Schwächster Stand", "–" if not sw else f"{'#R' if sw['zufriedenheit'] < 0.5 else '#G'} "
-                                                   f"{loc(ingame_kacheln.stand_sym(sw.get('stand')) + str(sw['name']))} {_de(sw['zufriedenheit'] * 100, 0)} %#!",
-           "Zufriedenheit des am wenigsten zufriedenen Stands; unter 50 % rot (Kachel Stände)"),
-          ("Forschung", "–" if not isinstance(lf.get("je_monat"), (int, float)) else f"{_de(lf['je_monat'], 2)} je Monat",
-           f"Laufend: {loc(lf.get('name') or '–')}" + (f", {_de(lf['fortschritt'], 1)} von {_de(lf['kosten'], 2)}"
+    kz = [(ue("Gold"), "–" if g is None else f"{_de(g, 0)}" + ("" if dg is None else f" ({'#G' if dg >= 0 else '#R'} {'+' if dg >= 0 else ''}{_de(dg, 1)}#!)"),
+           ue("Gold laut Daten-Mod, in Klammern die Änderung zum Vormonat")),
+          (ue("Schwächster Stand"), "–" if not sw else f"{'#R' if sw['zufriedenheit'] < 0.5 else '#G'} "
+                                                   f"{loc(ingame_kacheln.stand_sym(sw.get('stand')) + str(sw['name']))} {ue(t'{_de(sw["zufriedenheit"] * 100, 0)} %')}#!",
+           ue("Zufriedenheit des am wenigsten zufriedenen Stands; unter 50 % rot (Kachel Stände)")),
+          (ue("Forschung"), "–" if not isinstance(lf.get("je_monat"), (int, float)) else ue(t"{_de(lf['je_monat'], 2)} je Monat"),
+           ue(t"Laufend: {loc(lf.get('name') or '–')}") + (ue(t", {_de(lf['fortschritt'], 1)} von {_de(lf['kosten'], 2)}")
                                                       if isinstance(lf.get("fortschritt"), (int, float)) and isinstance(lf.get("kosten"), (int, float)) else ""))]
     for i, (l, w, tt) in enumerate(kz, 1):
         t[f"RG_RATGEBER_KZ{i}L"], t[f"RG_RATGEBER_KZ{i}W"], t[f"RG_RATGEBER_KZ{i}T"] = l, w, tt
@@ -337,13 +350,13 @@ def _gruendung(t, d):
         t["RG_RATGEBER_GR"], t["RG_RATGEBER_GRK"], t["RG_RATGEBER_GRT"], t["RG_RATGEBER_GRI"] = "", "", "", ""
         return
     gb = o.get("gebiet") or {}
-    t["RG_RATGEBER_GR"] = (f"#bold Gründung {loc(o.get('name'))}:#! {gb.get('unsere')} von {gb.get('noetig')} Orten"
-                           + (f" – {gb.get('fehlt')} fehlen" if gb.get("fehlt") else " – erfüllt"))
-    t["RG_RATGEBER_GRK"] = "#G gründbar#!" if o.get("gruendbar") else f"{_de(100 * gb['unsere'] / gb['noetig'], 0)} %" if gb.get("noetig") else ""
+    t["RG_RATGEBER_GR"] = (ue(t"#bold Gründung {loc(o.get('name'))}:#! {gb.get('unsere')} von {gb.get('noetig')} Orten")
+                           + (ue(t" – {gb.get('fehlt')} fehlen") if gb.get("fehlt") else ue(" – erfüllt")))
+    t["RG_RATGEBER_GRK"] = ue("#G gründbar#!") if o.get("gruendbar") else ue(t"{_de(100 * gb['unsere'] / gb['noetig'], 0)} %") if gb.get("noetig") else ""
     link = ingame_kacheln.ansicht("form_new_country")              # Mod 0.28: Klick öffnet die Ländergründung des Spiels
-    t["RG_RATGEBER_GRT"] = loc(tips.mit_klick(tips.mit_titel(f"{o.get('name')} (Grad {o.get('grad') or '–'})", [
-        f"Bedingungen: {o.get('bedingungen_erfuellt')} von {o.get('bedingungen_alle')} erfüllt",
-        f"Neuer Rang: {o.get('rang_neu_name') or '–'}", "Einzelheiten: Kachel Ländergründung"]), link["text"]))
+    t["RG_RATGEBER_GRT"] = loc(tips.mit_klick(tips.mit_titel(ue(t"{o.get('name')} (Grad {o.get('grad') or '–'})"), [
+        ue(t"Bedingungen: {o.get('bedingungen_erfuellt')} von {o.get('bedingungen_alle')} erfüllt"),
+        ue(t"Neuer Rang: {o.get('rang_neu_name') or '–'}"), ue("Einzelheiten: Kachel Ländergründung")]), link["text"]))
     t["RG_RATGEBER_GRI"] = symbol("Gründung")
     t["RG_RATGEBER_GRL"], t["RG_RATGEBER_GRZ"] = link["typ"], link["z"]
 
@@ -376,9 +389,9 @@ def texte(d, jetzt=None, pruef=None, symbole=None):
     _gruendung(t, d)
     t.update(ingame_kacheln.texte(d, FOKUSSE + [""], loc))     # Kacheln der Seite (Mod 0.27)
     meta = d.get("meta") or {}
-    t["RG_RATGEBER_STAND"] = (f"{loc(meta.get('land'))} · Spielstand {loc(meta.get('datum'))}"
-                              + (f" · Mod {loc(S.get('mod_datum'))}" if S.get("mod_datum") else " · ohne Daten-Mod")
-                              + f" · Ratgeber {time.strftime('%H:%M', jetzt or time.localtime())}")
+    t["RG_RATGEBER_STAND"] = (ue(t"{loc(meta.get('land'))} · Spielstand {loc(meta.get('datum'))}")
+                              + (ue(t" · Mod {loc(S.get('mod_datum'))}") if S.get("mod_datum") else ue(" · ohne Daten-Mod"))
+                              + ue(t" · Ratgeber {time.strftime('%H:%M', jetzt or time.localtime())}"))
     return {k: t.get(k, "") for k in alle_schluessel()}
 
 

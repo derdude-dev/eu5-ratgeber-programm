@@ -12,11 +12,12 @@ import json
 import re
 
 from . import history
+from .sprache import ue
 
 # Ursachen der Veränderung, wie sie im Spielstand stehen
-CHANGE_NAMES = {"Reproduction": "Wachstum", "PromotionIn": "Aufstieg herein", "PromotionOut": "Aufstieg hinaus",
-                "DemotionIn": "Abstieg herein", "DemotionOut": "Abstieg hinaus", "MigrationIn": "Zuwanderung",
-                "MigrationOut": "Abwanderung", "Assimilation": "Assimilation", "Conversion": "Bekehrung"}
+CHANGE_NAMES = {"Reproduction": ue("Wachstum"), "PromotionIn": ue("Aufstieg herein"), "PromotionOut": ue("Aufstieg hinaus"),
+                "DemotionIn": ue("Abstieg herein"), "DemotionOut": ue("Abstieg hinaus"), "MigrationIn": ue("Zuwanderung"),
+                "MigrationOut": ue("Abwanderung"), "Assimilation": ue("Assimilation"), "Conversion": ue("Bekehrung")}
 # Stichworte für "alle Parameter, die mit der Bevölkerung zusammenhängen" (Schlüssel der Live-Werte/Modifikatoren/Texte)
 PARAM = re.compile(r"pop|migra|litera|satisf|assimil|convers|growth|cultur|religi|food|employ|capacity|promot|demot|"
                    r"reproduc|heathen|heretic|faith|tolerat|accepted|primary|starv|slave|peasant|burgher|noble|clergy|"
@@ -52,7 +53,7 @@ def build(db, pid, names, modtypes=None):
             k = history.location_key(loc_keys, int(i))
         except (ValueError, TypeError):
             k = None
-        return names(k) if k else f"Ort {i}"
+        return names(k) if k else ue(t"Ort {i}")
 
     # Namen für Kultur/Religion: live (Mod 0.14: alle vorkommenden), sonst Spielstand, sonst Kennung
     cul_names = {str(k): names(v.get("name")) for k, v in (roh.get("kulturen") or {}).items()}
@@ -124,12 +125,12 @@ def build(db, pid, names, modtypes=None):
                  "veraenderung": sum(typ_changes.get(t, {}).values())}
                 for t, v in typen.items()]
     typ_list.sort(key=lambda x: -x["groesse"])
-    kul_list = [{"id": k, "name": cul_names.get(k, f"Kultur {k}"), "groesse": v["groesse"],
+    kul_list = [{"id": k, "name": cul_names.get(k, ue(t"Kultur {k}")), "groesse": v["groesse"],
                  "anteil": v["groesse"] / total if total else None, "status": sorted(v["status"]),
                  "ursachen": cul_changes.get(k, {}), "veraenderung": sum(cul_changes.get(k, {}).values())}
                 for k, v in kulturen.items()]
     kul_list.sort(key=lambda x: -x["groesse"])
-    rel_list = [{"id": k, "name": rel_names.get(k, f"Religion {k}"), "groesse": v["groesse"],
+    rel_list = [{"id": k, "name": rel_names.get(k, ue(t"Religion {k}")), "groesse": v["groesse"],
                  "anteil": v["groesse"] / total if total else None, "staatsreligion": k == str(rel.get("index")),
                  "ursachen": rel_changes.get(k, {}), "veraenderung": sum(rel_changes.get(k, {}).values())}
                 for k, v in religionen.items()]

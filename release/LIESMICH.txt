@@ -37,7 +37,8 @@ Mod und Programm müssen zusammenpassen. Sonst zeigt die Seite eine Warnung.
 
 GUT ZU WISSEN
 
-- Nur für deutsche Spielsprache.
+- Seitenleiste auf Deutsch und Englisch, in anderen Spielsprachen auf Englisch.
+  Die Seite im Browser gibt es vorerst nur auf Deutsch.
 - Nach einem Spiel-Update kann der Mod ein Update brauchen.
 - Der Ratgeber endet mit dem Browser-Tab, läuft das Spiel, mit dem Spiel.
   Hängt er doch einmal: „Ratgeber beenden.bat“.

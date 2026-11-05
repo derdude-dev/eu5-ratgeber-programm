@@ -5,5 +5,5 @@ PROGRAMM_VERSION: die Exe. Eine Korrektur nur am Programm erhöht nur diese Numm
 Öffentlich starten beide mit 0.30, unsere Zählung läuft einfach weiter (Nutzer 05.11.).
 Die Geschichte der Mod-Versionen steht in tools/build_mod.py.
 """
-MOD_VERSION = "0.29.0"
+MOD_VERSION = "0.29.1"
 PROGRAMM_VERSION = "0.29.0"

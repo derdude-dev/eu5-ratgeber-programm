@@ -37,17 +37,18 @@ import re
 
 from . import gamedata, wiki, wissen
 from . import sprache
+from .sprache import ue
 
 # Spielregel „Gründbare Länder“ -> höchste erlaubte rule-Stufe der Gründungen
 REGEL_STUFE = {"historical": 0, "plausible": 1, "fantasy": 2}
 REGEL_EINSTELLUNG = {"no_ahistorical_formable_countries": 0, "allow_plausible_ahistorical_formable_countries": 1,
                      "allow_ahistorical_formable_countries": 2}
-REGEL_NAME = {"historical": "historisch", "plausible": "plausibel", "fantasy": "ahistorisch"}
+REGEL_NAME = {"historical": ue("historisch"), "plausible": ue("plausibel"), "fantasy": ue("ahistorisch")}
 # geforderte Gebiete: Feld der Spieldatei -> Ebene der Kartenhierarchie, Anzeige, Spielbegriff (Wiki)
-EBENEN = (("continents", "kontinent", "Kontinent", "continent"), ("sub_continents", "subkontinent", "Subkontinent", "sub_continent"),
-          ("regions", "region", "Region", "region"), ("areas", "gebiet", "Gebiet", "area"),
-          ("provinces", "provinz", "Provinz", "province"), ("locations", None, "Ort", "location"))
-VERGLEICH = {"<": "weniger als", ">": "mehr als", "<=": "höchstens", ">=": "mindestens", "=": "genau", "!=": "nicht"}
+EBENEN = (("continents", "kontinent", ue("Kontinent"), "continent"), ("sub_continents", "subkontinent", ue("Subkontinent"), "sub_continent"),
+          ("regions", "region", ue("Region"), "region"), ("areas", "gebiet", ue("Gebiet"), "area"),
+          ("provinces", "provinz", ue("Provinz"), "province"), ("locations", None, ue("Ort"), "location"))
+VERGLEICH = {"<": ue("weniger als"), ">": ue("mehr als"), "<=": ue("höchstens"), ">=": ue("mindestens"), "=": ue("genau"), "!=": ue("nicht")}
 ROEMISCH = {1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI"}
 # Regel des Ratgebers: „fast gründbar“, wenn höchstens so viele Orte fehlen und alle bekannten Bedingungen erfüllt sind
 FAST_ORTE = 3
@@ -66,7 +67,7 @@ def _de(v, d=2):
 
 
 def _pz(v, d=0):
-    return _de(v * 100, d) + " %"
+    return ue(t"{_de(v * 100, d)} %")
 
 
 def _num(v):
@@ -230,7 +231,7 @@ def fakten_momentaufnahme(snap):
         "lebende": sorted({x["tag"] for x in snap.get("laender_militaer") or [] if x.get("tag")}) or None,
         "stand_macht": {e["stand"]: (e.get("mod") or {}).get("power") for e in snap.get("staende") or []
                         if _num((e.get("mod") or {}).get("power"))},
-        "stand_macht_quelle": "Spielstand (Variablen des Daten-Mods)",
+        "stand_macht_quelle": ue("Spielstand (Variablen des Daten-Mods)"),
         "regel": None,
     }
 
@@ -341,7 +342,9 @@ class Pruefer:
 
     def gruppe_adj(self, g):
         n = self.n(g)
-        return (n[:1].lower() + n[1:] + "en") if n and n != g else "geforderten"
+        if n and n != g:
+            return (n[:1].lower() + n[1:] + "en") if sprache.DEUTSCH else n
+        return ue("geforderten")
 
     # Knoten
     @staticmethod
@@ -373,26 +376,26 @@ class Pruefer:
             kinder = self.block(val, scope, sub_neg)
             w = [x["ok"] for x in kinder]
             if key == "AND":
-                return self.k("Alle folgenden:", _und(w), kinder=kinder, art="und") if len(kinder) > 1 else (kinder[0] if kinder else self.k("–", True))
+                return self.k(ue("Alle folgenden:"), _und(w), kinder=kinder, art="und") if len(kinder) > 1 else (kinder[0] if kinder else self.k("–", True))
             if key == "OR":
-                return self.k("Mindestens eines der folgenden Dinge muss zutreffen:", _oder(w), kinder=kinder, art="oder")
+                return self.k(ue("Mindestens eines der folgenden Dinge muss zutreffen:"), _oder(w), kinder=kinder, art="oder")
             if key == "NOR":
-                return self.k("Keines der folgenden darf zutreffen:", _nicht(_oder(w)), kinder=kinder, art="nicht")
+                return self.k(ue("Keines der folgenden darf zutreffen:"), _nicht(_oder(w)), kinder=kinder, art="nicht")
             if key == "NAND":
-                return self.k("Nicht alle der folgenden zugleich:", _nicht(_und(w)), kinder=kinder, art="nicht")
+                return self.k(ue("Nicht alle der folgenden zugleich:"), _nicht(_und(w)), kinder=kinder, art="nicht")
             if len(kinder) == 1:
-                return self.k("Darf nicht zutreffen:", _nicht(w[0]), kinder=kinder, art="nicht")
+                return self.k(ue("Darf nicht zutreffen:"), _nicht(w[0]), kinder=kinder, art="nicht")
             nor, nand = _nicht(_oder(w)), _nicht(_und(w))
-            return self.k("Darf nicht zutreffen (NICHT mit mehreren Bedingungen):", nor if nor == nand else None, kinder=kinder,
+            return self.k(ue("Darf nicht zutreffen (NICHT mit mehreren Bedingungen):"), nor if nor == nand else None, kinder=kinder,
                           art="nicht", hinweis=None if nor == nand else
-                          "Ob das Spiel hier „keins davon“ oder „nicht alle zugleich“ meint, ist nicht belegt – deshalb offen.")
+                          ue("Ob das Spiel hier „keins davon“ oder „nicht alle zugleich“ meint, ist nicht belegt – deshalb offen."))
         if key in ("trigger_if", "trigger_else_if", "trigger_else"):
             return self._wenn(key, val, scope, neg)
         if key == "custom_tooltip":
             return self._tooltip(val, scope, neg)
         if key == "always":
             j = _jn(val)
-            return self.k("Immer" if j else "Nie (Sonderregel des Spiels)", j)
+            return self.k(ue("Immer") if j else ue("Nie (Sonderregel des Spiels)"), j)
         # Bereiche (Scope-Wechsel)
         if key in ("culture", "any_primary_or_accepted_or_tolerated_culture") and isinstance(val, dict):
             return self._kultur(key, val, neg)
@@ -414,17 +417,17 @@ class Pruefer:
         lim = self.block(val.get("limit"), scope) if "limit" in val else []
         kinder = self.block({k: v for k, v in val.items() if k != "limit"}, scope, neg)
         bed = _und([x["ok"] for x in lim]) if lim else True
-        return bed, self.k("Vorbedingung:", bed, kinder=lim, art="vorbedingung"), self.k("dann gilt:", _und([x["ok"] for x in kinder]),
+        return bed, self.k(ue("Vorbedingung:"), bed, kinder=lim, art="vorbedingung"), self.k(ue("dann gilt:"), _und([x["ok"] for x in kinder]),
                                                                               kinder=kinder, art="und")
 
     def _wenn(self, key, val, scope, neg):
         """Einzelnes trigger_if (ohne sonst): trifft die Vorbedingung nicht zu, entfällt die Bedingung."""
         bed, vk, ik = self._zweig(val, scope, neg)
         if key == "trigger_else":                  # ohne trigger_if im selben Block (kommt nicht vor): Inhalt gilt
-            return self.k("Sonst:", ik["ok"], kinder=ik.get("kinder"), art="und")
+            return self.k(ue("Sonst:"), ik["ok"], kinder=ik.get("kinder"), art="und")
         ok = ik["ok"] if bed is True else True if bed is False else None
-        return self.k("Wenn die Vorbedingung zutrifft:", ok, kinder=[vk, ik], art="wenn",
-                      hinweis="Vorbedingung trifft nicht zu – entfällt" if bed is False else None)
+        return self.k(ue("Wenn die Vorbedingung zutrifft:"), ok, kinder=[vk, ik], art="wenn",
+                      hinweis=ue("Vorbedingung trifft nicht zu – entfällt") if bed is False else None)
 
     def _kette(self, b, scope, neg):
         """Fallkette trigger_if / trigger_else_if … / trigger_else: der erste Zweig mit zutreffender Vorbedingung gilt."""
@@ -433,8 +436,8 @@ class Pruefer:
         kinder, ok, fertig = [], None, False
         for z in zweige:
             bed, vk, ik = self._zweig(z, scope, neg)
-            kinder.append(self.k("Fall:", ik["ok"] if bed is True else None if bed is None else True, kinder=[vk, ik], art="wenn",
-                                 hinweis="trifft nicht zu" if bed is False else "dieser Fall gilt" if bed is True else None))
+            kinder.append(self.k(ue("Fall:"), ik["ok"] if bed is True else None if bed is None else True, kinder=[vk, ik], art="wenn",
+                                 hinweis=ue("trifft nicht zu") if bed is False else ue("dieser Fall gilt") if bed is True else None))
             if not fertig:
                 if bed is True:
                     ok, fertig = ik["ok"], True
@@ -443,11 +446,11 @@ class Pruefer:
         if "trigger_else" in b:
             kk = self.block(b["trigger_else"], scope, neg)
             inhalt = _und([x["ok"] for x in kk])
-            kinder.append(self.k("Sonst:", inhalt, kinder=kk, art="und", hinweis="entfällt" if fertig else "dieser Fall gilt",
+            kinder.append(self.k(ue("Sonst:"), inhalt, kinder=kk, art="und", hinweis=ue("entfällt") if fertig else ue("dieser Fall gilt"),
                                  entfaellt=True if fertig else None))
             if not fertig:
                 ok, fertig = inhalt, True
-        return self.k("Je nach Fall:", ok if fertig else True, kinder=kinder, art="kette")
+        return self.k(ue("Je nach Fall:"), ok if fertig else True, kinder=kinder, art="kette")
 
     def _tooltip(self, val, scope, neg):
         """custom_tooltip: der Spieltext steht für die Bedingung; always = no darin = auf diesem Weg nie erfüllt."""
@@ -456,8 +459,8 @@ class Pruefer:
         nie = _jn(val.get("always")) is False
         kinder = self.block({k: v for k, v in val.items() if k not in ("text", "always")}, scope, neg)
         ok = False if nie else _und([x["ok"] for x in kinder]) if kinder else None
-        return self.k(txt or "Sonderbedingung des Spiels (Text nicht auflösbar)", ok, kinder=kinder, art="und",
-                      hinweis="laut Spieldatei auf diesem Weg nie erfüllt – nur über den Weg im Spieltext" if nie else None)
+        return self.k(txt or ue("Sonderbedingung des Spiels (Text nicht auflösbar)"), ok, kinder=kinder, art="und",
+                      hinweis=ue("laut Spieldatei auf diesem Weg nie erfüllt – nur über den Weg im Spieltext") if nie else None)
 
     def _loc_text(self, key):
         loc = getattr(self.nm, "loc", None)
@@ -484,14 +487,14 @@ class Pruefer:
         if ok is False and unvollst:
             ok = None
         vorlage = je[0][1] if je else self.block(val, ("kultur", None), neg)
-        wer = "Primärkultur" if not alle else "Primär-, akzeptierte oder geduldete Kultur"
+        wer = ue("Primärkultur") if not alle else ue("Primär-, akzeptierte oder geduldete Kultur")
         if len(vorlage) == 1 and not vorlage[0].get("kinder"):
             x = vorlage[0]
             text = f"{wer}: {x['text']}"
-            ist = ", ".join(f"{self.n(k)}: {'ja' if w else 'nein' if w is False else '?'}" for k, w in zip(ks, ws))
-            return self.k(text, ok, ist=ist, wiki=x.get("wiki"), handlung=f"Kultur-Bedingung erfüllen: {text}", bereich="staat",
-                          hinweis="geduldete Kulturen nicht im Spielstand-Auszug" if unvollst else None)
-        return self.k(f"{wer} erfüllt:", ok, kinder=vorlage, art="und")
+            ist = ", ".join(f"{self.n(k)}: {ue('ja') if w else ue('nein') if w is False else '?'}" for k, w in zip(ks, ws))
+            return self.k(text, ok, ist=ist, wiki=x.get("wiki"), handlung=ue(t"Kultur-Bedingung erfüllen: {text}"), bereich="staat",
+                          hinweis=ue("geduldete Kulturen nicht im Spielstand-Auszug") if unvollst else None)
+        return self.k(ue(t"{wer} erfüllt:"), ok, kinder=vorlage, art="und")
 
     def _kultur_atom(self, key, val, kultur, neg):
         W, n = self.W, self.n
@@ -499,19 +502,19 @@ class Pruefer:
         if key == "has_culture_group":
             g = _ohne(val, "culture_group")
             ok = (g in (kd.get("culture_groups") or [])) if kd else None
-            return self.k(f"gehört zur {self.gruppe_adj(g)} Kulturgruppe", ok, wiki=self.wiki_ordner("culture_groups", g)
+            return self.k(ue(t"gehört zur {self.gruppe_adj(g)} Kulturgruppe"), ok, wiki=self.wiki_ordner("culture_groups", g)
                           or self.wiki_begriff("culture_group"))
         if key in ("language", "culture.language"):
             s = _ohne(val, "language")
             spr, _ = W.sprache(kultur) if kultur else (None, None)
-            return self.k(f"Sprache ist {n(s)}", (spr == s) if spr else None)
+            return self.k(ue(t"Sprache ist {n(s)}"), (spr == s) if spr else None)
         if key in ("dialect", "culture.dialect"):
             s = _ohne(val, "dialect")
             spr, dia = W.sprache(kultur) if kultur else (None, None)
-            return self.k(f"Dialekt ist {n(s)}", (dia == s) if (spr or dia) else None)
+            return self.k(ue(t"Dialekt ist {n(s)}"), (dia == s) if (spr or dia) else None)
         if key == "this" or key == "culture":
             c = _ohne(val, "culture")
-            return self.k(f"ist {n(c)}", (kultur == c) if kultur else None)
+            return self.k(ue(t"ist {n(c)}"), (kultur == c) if kultur else None)
         return self._skript_oder_unbekannt(key, val, ("kultur", kultur), neg)
 
     # anderes Land (c:XXX = { … })
@@ -523,13 +526,13 @@ class Pruefer:
         F, n = self.F, self.n
         if key in ("is_subject_or_below_of", "is_subject_of") and str(val).lower() == "root":
             ok = True if tag in (F.get("untertanen") or []) else None
-            return self.k(f"ist unser Klientelland{' (oder darunter)' if key == 'is_subject_or_below_of' else ''}", ok,
-                          wiki=self.wiki_begriff("subject"), handlung=f"{n(tag)} zum Klientelland machen oder vernichten",
+            return self.k(ue(t"ist unser Klientelland{ue(' (oder darunter)') if key == 'is_subject_or_below_of' else ''}"), ok,
+                          wiki=self.wiki_begriff("subject"), handlung=ue(t"{n(tag)} zum Klientelland machen oder vernichten"),
                           bereich="diplomatie")
         if key == "in_union_with" and str(val).lower() == "root":
-            return self.k("ist in einer Union mit uns", None, wiki=self.wiki_begriff("union"))
+            return self.k(ue("ist in einer Union mit uns"), None, wiki=self.wiki_begriff("union"))
         if key == "has_presence_in":
-            return self.k(f"ist in {n(_ohne(val, 'region'))} vertreten", None)
+            return self.k(ue(t"ist in {n(_ohne(val, 'region'))} vertreten"), None)
         return self._skript_oder_unbekannt(key, val, ("fremd", tag), neg)
 
     # eigene Orte (any_owned_location = { … })
@@ -538,7 +541,7 @@ class Pruefer:
         je = [_und([x["ok"] for x in self.block(val, ("ort", o))]) for o in orte]
         vorlage = self.block(val, ("ort", None))
         ok = _oder(je) if orte else False
-        return self.k("Mindestens ein eigener Ort:", ok, kinder=vorlage, art="und")
+        return self.k(ue("Mindestens ein eigener Ort:"), ok, kinder=vorlage, art="und")
 
     def _ort_atom(self, key, val, ort):
         h = (_karte()["hier"].get(ort) or {}) if ort else {}
@@ -546,8 +549,8 @@ class Pruefer:
                "sub_continent": "subkontinent"}.get(key)
         if art:
             z = _ohne(_ohne(val, "province_definition"), key)
-            return self.k(f"liegt in {self.n(z)}", (h.get(art) == z) if ort else None)
-        return self.k("weitere Ortsbedingung der Spieldatei (vom Ratgeber nicht ausgewertet)", None)
+            return self.k(ue(t"liegt in {self.n(z)}"), (h.get(art) == z) if ort else None)
+        return self.k(ue("weitere Ortsbedingung der Spieldatei (vom Ratgeber nicht ausgewertet)"), None)
 
     # eigenes Land
     def _land_atom(self, key, val, neg):
@@ -556,37 +559,37 @@ class Pruefer:
         if key == "owns":
             o = _ohne(v, "location")
             ok = o in set(F.get("orte") or [])
-            return self.k(f"Besitzt {n(o)}", ok, wiki=self.wiki_begriff("location"), ort=o,
-                          handlung=(f"{n(o)} erobern oder erwerben" if not neg else f"{n(o)} abgeben"), bereich="militaer")
+            return self.k(ue(t"Besitzt {n(o)}"), ok, wiki=self.wiki_begriff("location"), ort=o,
+                          handlung=(ue(t"{n(o)} erobern oder erwerben") if not neg else ue(t"{n(o)} abgeben")), bereich="militaer")
         if key in ("culture", "culture.language", "culture.dialect"):
             x = self._kultur_atom({"culture": "this"}.get(key, key), val, F.get("kultur"), neg)
-            return self.k(f"Primärkultur: {x['text']}", x["ok"], ist=n(F["kultur"]) if F.get("kultur") else None,
-                          handlung=f"Kultur-Bedingung erfüllen: Primärkultur {x['text']}", bereich="staat")
+            return self.k(ue(t"Primärkultur: {x['text']}"), x["ok"], ist=n(F["kultur"]) if F.get("kultur") else None,
+                          handlung=ue(t"Kultur-Bedingung erfüllen: Primärkultur {x['text']}"), bereich="staat")
         if key == "at_war":
             j = _jn(v)
             k = F.get("krieg")
             ok = None if k is None else (k == j)
-            return self.k("Ist im Krieg" if j else "Hat Frieden", ok, wiki=self.wiki_begriff("war" if j else "peace"),
-                          ist=None if k is None else ("im Krieg" if k else "kein Krieg"),
-                          handlung="Laufende Kriege beenden (Frieden schließen)" if not j else None, bereich="staat")
+            return self.k(ue("Ist im Krieg") if j else ue("Hat Frieden"), ok, wiki=self.wiki_begriff("war" if j else "peace"),
+                          ist=None if k is None else (ue("im Krieg") if k else ue("kein Krieg")),
+                          handlung=ue("Laufende Kriege beenden (Frieden schließen)") if not j else None, bereich="staat")
         if key == "in_civil_war":
             j = _jn(v)
             k = F.get("buergerkrieg")
-            return self.k("Ist in einem Bürgerkrieg" if j else "Ist NICHT in einem Bürgerkrieg", None if k is None else (k == j),
+            return self.k(ue("Ist in einem Bürgerkrieg") if j else ue("Ist NICHT in einem Bürgerkrieg"), None if k is None else (k == j),
                           wiki=self.wiki_begriff("civil_war"))
         if key == "has_estate_privilege":
             p = _ohne(v, "estate_privilege")
             stand = (W.defs("estate_privileges").get(p) or {}).get("estate") if isinstance(W.defs("estate_privileges").get(p), dict) else None
             ok = p in set(F.get("privilegien") or [])
             st = f" ({n(stand)})" if stand else ""
-            return self.k(f"Hat das Privileg „{n(p)}“{st}", ok, wiki=self.wiki_ordner("estate_privileges", p) or self.wiki_begriff("estate_privilege"),
-                          handlung=f"Privileg „{n(p)}“{st} gewähren" if not neg else f"Privileg „{n(p)}“{st} entziehen", bereich="staat")
+            return self.k(ue(t"Hat das Privileg „{n(p)}“{st}"), ok, wiki=self.wiki_ordner("estate_privileges", p) or self.wiki_begriff("estate_privilege"),
+                          handlung=ue(t"Privileg „{n(p)}“{st} gewähren") if not neg else ue(t"Privileg „{n(p)}“{st} entziehen"), bereich="staat")
         if key == "has_reform":
             r = _ohne(v, "government_reform")
             ok = r in set(F.get("reformen") or [])
-            return self.k(f"Hat die Regierungsreform „{n(r)}“", ok,
+            return self.k(ue(t"Hat die Regierungsreform „{n(r)}“"), ok,
                           wiki=self.wiki_ordner("government_reforms", r) or self.wiki_begriff("government_reform"),
-                          handlung=f"Regierungsreform „{n(r)}“ einführen" if not neg else f"Regierungsreform „{n(r)}“ abschaffen",
+                          handlung=ue(t"Regierungsreform „{n(r)}“ einführen") if not neg else ue(t"Regierungsreform „{n(r)}“ abschaffen"),
                           bereich="staat")
         m = re.match(r"estate_power\(estate_type:(\w+)\)(<=|>=|<|>|=)?$", key)
         if m:
@@ -595,41 +598,41 @@ class Pruefer:
             ok = None
             if _num(ist) and _num(val):
                 ok = {"<": ist < val, ">": ist > val, "<=": ist <= val, ">=": ist >= val, "=": ist == val}[op]
-            ziel = {"<": "unter", "<=": "auf höchstens", ">": "über", ">=": "auf mindestens", "=": "auf"}[op]
+            ziel = {"<": ue("unter"), "<=": ue("auf höchstens"), ">": ue("über"), ">=": ue("auf mindestens"), "=": ue("auf")}[op]
             if neg:
-                ziel = {"<": "auf mindestens", "<=": "über", ">": "auf höchstens", ">=": "unter", "=": "weg von"}[op]
-            return self.k(f"Unser {n(e)} hat {VERGLEICH[op]} {_pz(val, 0) if _num(val) else val} Standes-Macht", ok,
+                ziel = {"<": ue("auf mindestens"), "<=": ue("über"), ">": ue("auf höchstens"), ">=": ue("unter"), "=": ue("weg von")}[op]
+            return self.k(ue(t"Unser {n(e)} hat {VERGLEICH[op]} {_pz(val, 0) if _num(val) else val} Standes-Macht"), ok,
                           ist=_pz(ist, 1) if _num(ist) else None, wiki=self.wiki_begriff("estate_power"),
-                          handlung=f"Macht des {n(e)}s {ziel} {_pz(val, 0) if _num(val) else val} bringen"
-                          + (f" (jetzt {_pz(ist, 1)})" if _num(ist) else ""), bereich="staat")
+                          handlung=ue(t"Macht des {n(e)}s {ziel} {_pz(val, 0) if _num(val) else val} bringen")
+                          + (ue(t" (jetzt {_pz(ist, 1)})") if _num(ist) else ""), bereich="staat")
         if key in ("religion", "religion.group", "religion.group!="):
             gruppe = key != "religion"
             z = _ohne(_ohne(v, "religion_group"), "religion")
             ist = F.get("religionsgruppe") if gruppe else F.get("religion")
             ok = None if not ist else ((ist == z) != key.endswith("!="))
-            was = "Religionsgruppe" if gruppe else "Religion"
-            return self.k(f"{was} ist {'NICHT ' if key.endswith('!=') else ''}{n(z)}", ok, ist=n(ist) if ist else None,
+            was = ue("Religionsgruppe") if gruppe else ue("Religion")
+            return self.k(ue(t"{was} ist {ue('NICHT ') if key.endswith('!=') else ''}{n(z)}"), ok, ist=n(ist) if ist else None,
                           wiki=self.wiki_ordner("religion_groups" if gruppe else "religions", z) or self.wiki_begriff("religion"),
-                          handlung=f"{was} wechseln", bereich="staat")
+                          handlung=ue(t"{was} wechseln"), bereich="staat")
         if key in ("tag", "this", "this!="):
             t = _ohne(v, "c")
             ok = (F.get("tag") == t) != (key == "this!=")
-            return self.k(f"Ist {'NICHT ' if key == 'this!=' else ''}{n(t)}", ok)
+            return self.k(ue(t"Ist {ue('NICHT ') if key == 'this!=' else ''}{n(t)}"), ok)
         if key == "has_or_had_tag":
             # bisherige Kürzel: heute und zu Spielbeginn (original_tag); hat das Land nie gewechselt, ist die Liste vollständig
             t = v
             bisher = set(F.get("tags_bisher") or [F.get("tag"), F.get("tag_original")])
             vollst = F.get("tags_bisher") is not None or F.get("tag") == F.get("tag_original")
             ok = True if t in bisher else (False if vollst else None)
-            return self.k(f"Ist oder war {n(t)}", ok)
+            return self.k(ue(t"Ist oder war {n(t)}"), ok)
         if key == "country_exists":
             t = _ohne(v, "c")
             leb = F.get("lebende")
-            return self.k(f"{n(t)} existiert", None if leb is None else t in set(leb),
-                          handlung=f"{n(t)} vernichten oder unterwerfen" if neg else None, bereich="militaer")
+            return self.k(ue(t"{n(t)} existiert"), None if leb is None else t in set(leb),
+                          handlung=ue(t"{n(t)} vernichten oder unterwerfen") if neg else None, bereich="militaer")
         if key == "country_rank":
             r = _ohne(v, "country_rank")
-            return self.k(f"Rang ist „{n(r)}“", (F.get("rang") == r) if F.get("rang") else None, ist=n(F["rang"]) if F.get("rang") else None,
+            return self.k(ue(t"Rang ist „{n(r)}“"), (F.get("rang") == r) if F.get("rang") else None, ist=n(F["rang"]) if F.get("rang") else None,
                           wiki=self.wiki_ordner("country_ranks", r) or self.wiki_begriff("country_rank"))
         m = re.match(r"country_rank_level(<=|>=|<|>|=|!=)?$", key)
         if m:
@@ -637,81 +640,81 @@ class Pruefer:
             ist = F.get("stufe")
             ok = None if not _num(ist) or not _num(val) else {"<": ist < val, ">": ist > val, "<=": ist <= val, ">=": ist >= val,
                                                               "=": ist == val, "!=": ist != val}[op]
-            return self.k(f"Rang-Stufe {VERGLEICH[op]} {val}", ok, ist=str(ist) if _num(ist) else None, wiki=self.wiki_begriff("country_rank"))
+            return self.k(ue(t"Rang-Stufe {VERGLEICH[op]} {val}"), ok, ist=str(ist) if _num(ist) else None, wiki=self.wiki_begriff("country_rank"))
         if key == "current_age":
-            return self.k(f"Es ist das Zeitalter „{n(v)}“", (F.get("zeitalter") == v) if F.get("zeitalter") else None,
+            return self.k(ue(t"Es ist das Zeitalter „{n(v)}“"), (F.get("zeitalter") == v) if F.get("zeitalter") else None,
                           wiki=self.wiki_ordner("age", v) or self.wiki_begriff("age"))
         if key == "current_age_or_later":
             a = (val or {}).get("age") if isinstance(val, dict) else v
             i, j = _zeitalter_nr(F.get("zeitalter")), _zeitalter_nr(a)
-            return self.k(f"Es ist das Zeitalter „{n(a)}“ oder später", None if i is None or j is None else i >= j,
+            return self.k(ue(t"Es ist das Zeitalter „{n(a)}“ oder später"), None if i is None or j is None else i >= j,
                           wiki=self.wiki_ordner("age", a) or self.wiki_begriff("age"))
         m = re.match(r"current_year(<=|>=|<|>|=)?$", key)
         if m:
             op, ist = m.group(1) or "=", F.get("jahr")
             ok = None if not _num(ist) or not _num(val) else {"<": ist < val, ">": ist > val, "<=": ist <= val, ">=": ist >= val, "=": ist == val}[op]
-            return self.k(f"Derzeitiges Jahr ist {VERGLEICH[op]} {val}", ok)
+            return self.k(ue(t"Derzeitiges Jahr ist {VERGLEICH[op]} {val}"), ok)
         if key in ("is_member_of_international_organization", "is_leader_of_international_organization", "exists"):
             io = _ohne(v, "international_organization")
             feld = {"exists": "io_welt", "is_leader_of_international_organization": "io_leiter"}.get(key, "io")
             liste = F.get(feld)
             ok = None if liste is None else io in set(liste)
-            text = {"exists": f"{n(io)} existiert", "is_leader_of_international_organization": f"Führt {n(io)}"}.get(
-                key, f"Ist Mitglied von {n(io)}")
+            text = {"exists": ue(t"{n(io)} existiert"), "is_leader_of_international_organization": ue(t"Führt {n(io)}")}.get(
+                key, ue(t"Ist Mitglied von {n(io)}"))
             return self.k(text, ok, wiki=self.wiki_begriff("holy_roman_empire") if io == "hre" else self.wiki_begriff("international_organization"))
         if key == "is_member_of_international_organization_of_type":
             io = (val or {}).get("type") if isinstance(val, dict) else v
             liste = F.get("io")
-            return self.k(f"Ist Mitglied einer Organisation der Art „{n(io)}“", None if liste is None else io in set(liste),
+            return self.k(ue(t"Ist Mitglied einer Organisation der Art „{n(io)}“"), None if liste is None else io in set(liste),
                           wiki=self.wiki_begriff("international_organization"))
         if key in ("government_type", "government_type!="):
             g = _ohne(v, "government_type")
             ist = F.get("regierungsform")
             ok = None if not ist else ((ist == g) != key.endswith("!="))
-            return self.k(f"Regierungsform ist {'NICHT ' if key.endswith('!=') else ''}{n(g)}", ok, ist=n(ist) if ist else None,
+            return self.k(ue(t"Regierungsform ist {ue('NICHT ') if key.endswith('!=') else ''}{n(g)}"), ok, ist=n(ist) if ist else None,
                           wiki=self.wiki_begriff("government_type"))
         if key == "is_subject":
             j, ist = _jn(v), F.get("untertan")
-            return self.k("Ist ein Klientelland eines anderen Landes" if j else "Ist KEIN Klientelland eines anderen Landes",
+            return self.k(ue("Ist ein Klientelland eines anderen Landes") if j else ue("Ist KEIN Klientelland eines anderen Landes"),
                           None if ist is None else ist == j, wiki=self.wiki_begriff("subject"),
-                          handlung="Unabhängigkeit erlangen" if not j else None, bereich="diplomatie")
+                          handlung=ue("Unabhängigkeit erlangen") if not j else None, bereich="diplomatie")
         if key == "has_advance":
             a = _ohne(v, "advance_type")
-            return self.k(f"Hat den Fortschritt „{n(a)}“", a in set(F.get("fortschritte") or []),
+            return self.k(ue(t"Hat den Fortschritt „{n(a)}“"), a in set(F.get("fortschritte") or []),
                           techbaum=f"techbaum/{a}" if self.W.gibt("advances", a) else None,
-                          handlung=f"Fortschritt „{n(a)}“ erforschen", bereich="staat")
+                          handlung=ue(t"Fortschritt „{n(a)}“ erforschen"), bereich="staat")
         if key == "court_language":
             s = _ohne(_ohne(v, "language"), "dialect")
             ist = F.get("hofsprache")
-            return self.k(f"Die Hofsprache ist {n(s)}", None if not ist else ist == s, ist=n(ist) if ist else None,
+            return self.k(ue(t"Die Hofsprache ist {n(s)}"), None if not ist else ist == s, ist=n(ist) if ist else None,
                           wiki=self.wiki_begriff("court_language"))
         if key == "is_hegemon":
-            return self.k("Ist ein Hegemon" if _jn(v) else "Ist KEIN Hegemon", None, wiki=self.wiki_begriff("hegemony"))
+            return self.k(ue("Ist ein Hegemon") if _jn(v) else ue("Ist KEIN Hegemon"), None, wiki=self.wiki_begriff("hegemony"))
         if key == "has_dlc":
             dn = _dlc_name(v)
-            return self.k(f"Hat den DLC „{dn}“" if dn else "Hat eine bestimmte Erweiterung (DLC)", None)
+            return self.k(ue(t"Hat den DLC „{dn}“") if dn else ue("Hat eine bestimmte Erweiterung (DLC)"), None)
         if key.startswith("global_var:") or key == "has_variable" or key.startswith("var:"):
-            return self.k("Spielvariable (Ergebnis eines Ereignisses oder einer Situation) – nicht im Spielstand-Auszug", None)
+            return self.k(ue("Spielvariable (Ergebnis eines Ereignisses oder einer Situation) – nicht im Spielstand-Auszug"), None)
         if key.startswith("situation:") or key == "is_situation_active":
-            return self.k("Bedingung an eine Situation des Spiels (nicht ausgewertet)", None)
+            return self.k(ue("Bedingung an eine Situation des Spiels (nicht ausgewertet)"), None)
         if key in ("has_ruler", "ruler"):
-            return self.k("Bedingung an den Herrscher (nicht ausgewertet)", None)
+            return self.k(ue("Bedingung an den Herrscher (nicht ausgewertet)"), None)
         if key.startswith("international_organization:") or key.startswith("region:") or key.startswith("province_definition:") \
                 or key.startswith("location:"):
-            return self.k("Bedingung an eine Organisation oder ein Gebiet des Spiels (nicht ausgewertet)", None)
+            return self.k(ue("Bedingung an eine Organisation oder ein Gebiet des Spiels (nicht ausgewertet)"), None)
         return self._skript_oder_unbekannt(key, val, ("land",), neg)
 
     def _skript_oder_unbekannt(self, key, val, scope, neg):
         st = self.W.defs("scripted_triggers").get(key)
         if isinstance(st, dict) and _jn(val) is not None:
             loc = getattr(self.nm, "loc", None) or {}
-            text = gamedata.clean_loc(loc.get(f"{key}_tt") or loc.get(key) or "", loc) or "Sonderbedingung des Spiels"
+            text = gamedata.clean_loc(loc.get(f"{key}_tt") or loc.get(key) or "", loc) or ue("Sonderbedingung des Spiels")
             kinder = self.block(st, scope, neg if _jn(val) else not neg)
             ok = _und([x["ok"] for x in kinder])
             if _jn(val) is False:
-                return self.k(f"Darf nicht zutreffen: {text}", _nicht(ok), kinder=kinder, art="und")
+                return self.k(ue(t"Darf nicht zutreffen: {text}"), _nicht(ok), kinder=kinder, art="und")
             return self.k(text, ok, kinder=kinder, art="und")
-        return self.k("Weitere Bedingung der Spieldatei (vom Ratgeber nicht ausgewertet)", None)
+        return self.k(ue("Weitere Bedingung der Spieldatei (vom Ratgeber nicht ausgewertet)"), None)
 
 
 # ---------------------------------------------------------------- Gebiet
@@ -826,60 +829,60 @@ def effekte(W, F, d, names=None):
                 gehe({a: b2 for a, b2 in vv.items() if a != "limit"}, (bed + "; " if bed else "") + text,
                      ok if w is True else (False if w is False else None) if ok is not False else False)
             elif k == "else":
-                gehe(v, (bed + "; " if bed else "") + "sonst", None)
+                gehe(v, (bed + "; " if bed else "") + ue("sonst"), None)
             elif k == "hidden_effect" or k == "change_country_color":
                 continue
             elif k == "set_country_rank_effect":
                 r = _ohne((v or {}).get("rank") if isinstance(v, dict) else v, "country_rank")
-                out.append({"text": f"Rang wird „{n(r)}“", "rang": r, "bedingung": bed, "ok": ok,
+                out.append({"text": ue(t"Rang wird „{n(r)}“"), "rang": r, "bedingung": bed, "ok": ok,
                             "wiki": P.wiki_ordner("country_ranks", r)})
             elif k == "change_government_type":
                 g = _ohne(v, "government_type")
-                out.append({"text": f"Regierungsform wird {n(g)}", "regierungsform": g, "bedingung": bed, "ok": ok,
+                out.append({"text": ue(t"Regierungsform wird {n(g)}"), "regierungsform": g, "bedingung": bed, "ok": ok,
                             "wiki": P.wiki_begriff("government_type")})
             elif k in ("add_legitimacy", "add_stability", "add_government_power", "add_prestige"):
-                was = {"add_legitimacy": "Legitimität", "add_stability": "Stabilität", "add_government_power": "Regierungsmacht",
-                       "add_prestige": "Prestige"}[k]
+                was = {"add_legitimacy": ue("Legitimität"), "add_stability": ue("Stabilität"), "add_government_power": ue("Regierungsmacht"),
+                       "add_prestige": ue("Prestige")}[k]
                 z = wert(v)
-                out.append({"text": f"{was} {'+' + _de(z, 0) if _num(z) else '(Wert laut Spieldatei)'}", "bedingung": bed, "ok": ok,
+                out.append({"text": f"{was} {'+' + _de(z, 0) if _num(z) else ue('(Wert laut Spieldatei)')}", "bedingung": bed, "ok": ok,
                             "wiki": P.wiki_begriff({"add_legitimacy": "legitimacy", "add_stability": "stability",
                                                     "add_prestige": "prestige"}.get(k, ""))})
             elif k == "set_capital":
-                out.append({"text": f"Hauptstadt wird {n(_ohne(v, 'location'))}", "bedingung": bed, "ok": ok, "wiki": P.wiki_begriff("capital")})
+                out.append({"text": ue(t"Hauptstadt wird {n(_ohne(v, 'location'))}"), "bedingung": bed, "ok": ok, "wiki": P.wiki_begriff("capital")})
             elif k == "move_capital_event_effect":
                 z = _ohne((v or {}).get("to") if isinstance(v, dict) else v, "location")
-                out.append({"text": f"Hauptstadt soll nach {n(z)} verlegt werden (Ereignis)", "bedingung": bed, "ok": ok,
+                out.append({"text": ue(t"Hauptstadt soll nach {n(z)} verlegt werden (Ereignis)"), "bedingung": bed, "ok": ok,
                             "wiki": P.wiki_begriff("capital")})
             elif k == "set_court_language":
-                out.append({"text": f"Hofsprache wird {n(_ohne(_ohne(v, 'dialect'), 'language'))}", "bedingung": bed, "ok": ok,
+                out.append({"text": ue(t"Hofsprache wird {n(_ohne(_ohne(v, 'dialect'), 'language'))}"), "bedingung": bed, "ok": ok,
                             "wiki": P.wiki_begriff("court_language")})
             elif k in ("unlock_casus_belli_effect", "unlock_policy_effect", "unlock_government_reform_effect"):
                 t = (v or {}).get("type") if isinstance(v, dict) else v
-                was = {"unlock_casus_belli_effect": "Kriegsgrund", "unlock_policy_effect": "Politik",
-                       "unlock_government_reform_effect": "Regierungsreform"}[k]
-                out.append({"text": f"{was} „{n(t)}“ wird freigeschaltet", "bedingung": bed, "ok": ok})
+                was = {"unlock_casus_belli_effect": ue("Kriegsgrund"), "unlock_policy_effect": ue("Politik"),
+                       "unlock_government_reform_effect": ue("Regierungsreform")}[k]
+                out.append({"text": ue(t"{was} „{n(t)}“ wird freigeschaltet"), "bedingung": bed, "ok": ok})
             elif k in ("add_reform", "remove_reform", "add_replacing_gov_reform"):
                 r = _ohne((v or {}).get("reform") if isinstance(v, dict) else v, "government_reform")
-                out.append({"text": f"Regierungsreform „{n(r)}“ wird {'abgeschafft' if k == 'remove_reform' else 'eingeführt'}",
+                out.append({"text": (ue(t"Regierungsreform „{n(r)}“ wird abgeschafft") if k == "remove_reform" else ue(t"Regierungsreform „{n(r)}“ wird eingeführt")),
                             "bedingung": bed, "ok": ok, "wiki": P.wiki_ordner("government_reforms", r)})
             elif k == "add_country_modifier":
                 m = (v or {}).get("modifier") if isinstance(v, dict) else v
                 j = (v or {}).get("years") if isinstance(v, dict) else None
                 # Name: STATIC_MODIFIER_NAME_<schlüssel> (Lokalisierung static_modifiers)
                 nm = (W.roh("static_modifiers").get(m) or {}).get("name") or n(f"STATIC_MODIFIER_NAME_{m}")
-                txt = f"Landesmodifikator „{nm}“" if nm != f"STATIC_MODIFIER_NAME_{m}" else "Ein Landesmodifikator"
-                out.append({"text": txt + (f" für {j} Jahre" if _num(j) else ""), "bedingung": bed, "ok": ok})
+                txt = ue(t"Landesmodifikator „{nm}“") if nm != f"STATIC_MODIFIER_NAME_{m}" else ue("Ein Landesmodifikator")
+                out.append({"text": txt + (ue(t" für {j} Jahre") if _num(j) else ""), "bedingung": bed, "ok": ok})
             elif k == "research_advance":
                 a = _ohne(v, "advance_type")
-                out.append({"text": f"Fortschritt „{n(a)}“ wird erforscht", "bedingung": bed, "ok": ok,
+                out.append({"text": ue(t"Fortschritt „{n(a)}“ wird erforscht"), "bedingung": bed, "ok": ok,
                             "techbaum": f"techbaum/{a}" if W.gibt("advances", a) else None})
             elif k == "change_societal_value":
                 t = (v or {}).get("type") if isinstance(v, dict) else v
-                out.append({"text": f"Gesellschaftswert „{n(t)}“ verschiebt sich", "bedingung": bed, "ok": ok})
+                out.append({"text": ue(t"Gesellschaftswert „{n(t)}“ verschiebt sich"), "bedingung": bed, "ok": ok})
             elif k.startswith("trigger_event"):
-                out.append({"text": "Löst ein Ereignis aus", "bedingung": bed, "ok": ok})
+                out.append({"text": ue("Löst ein Ereignis aus"), "bedingung": bed, "ok": ok})
             else:
-                out.append({"text": "Weitere Wirkung der Spieldatei (vom Ratgeber nicht übersetzt)", "bedingung": bed, "ok": ok})
+                out.append({"text": ue("Weitere Wirkung der Spieldatei (vom Ratgeber nicht übersetzt)"), "bedingung": bed, "ok": ok})
     gehe(d.get("form_effect"))
     return out
 
@@ -935,7 +938,7 @@ def _kurz(x):
     if not k:
         return x["text"]
     innen = "; ".join(_kurz(y) for y in k)
-    return {"nicht": f"nicht ({innen})", "oder": f"eines von ({innen})"}.get(x.get("art"), innen)
+    return {"nicht": ue(t"nicht ({innen})"), "oder": ue(t"eines von ({innen})")}.get(x.get("art"), innen)
 
 
 def _handlungen(knoten, out, umgekehrt=False):
@@ -953,7 +956,7 @@ def _handlungen(knoten, out, umgekehrt=False):
             out.append({"bereich": x.get("bereich") or "staat", "text": x["handlung"], "bedingung": x["text"], "ist": x.get("ist"),
                         "ort": x.get("ort")})
         elif x.get("ok") is None:
-            out.append({"bereich": "staat", "text": f"Im Spiel prüfen: {x['text']}", "bedingung": x["text"], "offen": True})
+            out.append({"bereich": "staat", "text": ue(t"Im Spiel prüfen: {x['text']}"), "bedingung": x["text"], "offen": True})
 
 
 def build(last, quelle=None, names=None, nachbarn=None, lv=None, land=None, spiel=None):
@@ -979,13 +982,13 @@ def _build(last, quelle, names, nachbarn, lv, land, spiel=None):
     r = (lv or [])[-1] if lv else {}
     sm = {k[6:]: v for k, v in r.items() if k.startswith("power_") and k.endswith("_estate") and _num(v)}
     if sm:
-        F["stand_macht"], F["stand_macht_quelle"] = sm, f"Daten-Mod {r.get('datum')}"
+        F["stand_macht"], F["stand_macht_quelle"] = sm, ue(t"Daten-Mod {r.get('datum')}")
     land = land or {}
     if _num(land.get("formable_level")):
-        F["stufe"], quellen["stufe"] = int(land["formable_level"]), "Daten-Mod (formable_level, Grad laut Spiel)"
+        F["stufe"], quellen["stufe"] = int(land["formable_level"]), ue("Daten-Mod (formable_level, Grad laut Spiel)")
     else:
-        F["stufe"], quellen["stufe"] = W.grad(F.get("tag")), ("Regel des Ratgebers: Stufe der Gründung mit unserem Kürzel, sonst 0 "
-                                                             "(ohne Daten-Mod)")
+        F["stufe"], quellen["stufe"] = W.grad(F.get("tag")), (ue("Regel des Ratgebers: Stufe der Gründung mit unserem Kürzel, sonst 0 "
+                                                             "(ohne Daten-Mod)"))
     # ab Mod 0.25: Gründungen, die das Spiel uns zeigt, mit Gebietsfortschritt laut Spiel
     sp_werte = (spiel or {}).get("werte") or {}
     if _num(land.get("dip_IsAtWar")):
@@ -1119,7 +1122,7 @@ def _option(W, P, F, key, e, d, pot, pok, eigene, owner_von, mit_besitz, format1
     _handlungen(allow, hand)
     for h in hand:
         if h.get("ort") and owner_von.get(h["ort"]):
-            h["text"] += f" (Besitzer: {nm(owner_von[h['ort']])})"
+            h["text"] += ue(t" (Besitzer: {nm(owner_von[h['ort']])})")
     # Wirkung
     eff = effekte(W, F, d, nm)
     neu_rang = next((x["rang"] for x in eff if x.get("rang") and x.get("ok") is not False), None)
@@ -1182,14 +1185,14 @@ def _empfehlungen(F, d, besitzer, ohne, fehlt, hand, eff, neu_rang, W, nm, besit
     mil, dip, staat, wirt = [], [], [], []
     for h in hand:
         {"militaer": mil, "diplomatie": dip}.get(h["bereich"], staat).append(
-            {"text": h["text"], "grund": f"Bedingung „{h['bedingung']}“ nicht erfüllt" + (f" (jetzt: {h['ist']})" if h.get("ist") else "")
-             if not h.get("offen") else "Bedingung vom Ratgeber nicht auswertbar", "offen": h.get("offen")})
+            {"text": h["text"], "grund": ue(t"Bedingung „{h['bedingung']}“ nicht erfüllt") + (ue(t" (jetzt: {h['ist']})") if h.get("ist") else "")
+             if not h.get("offen") else ue("Bedingung vom Ratgeber nicht auswertbar"), "offen": h.get("offen")})
     if not besitz_bekannt and fehlt:
-        mil.append({"text": f"Es fehlen {fehlt} Orte – " + (
-                        "Besitzer stehen erst in Momentaufnahmen ab Format 17 (nächster Spielstand)" if besitz_fehlt != "kandidat" else
-                        "ihre Besitzer hat der Ratgeber beim Einlesen nicht gesammelt: nach dem Rang im Spielstand war diese Gründung "
-                        "noch keine Option (Stufe jetzt aus dem Daten-Mod)"),
-                    "grund": "Spielstand ohne Besitzerliste für diese Gründung", "offen": True})
+        mil.append({"text": ue(t"Es fehlen {fehlt} Orte – ") + (
+                        ue("Besitzer stehen erst in Momentaufnahmen ab Format 17 (nächster Spielstand)") if besitz_fehlt != "kandidat" else
+                        ue("ihre Besitzer hat der Ratgeber beim Einlesen nicht gesammelt: nach dem Rang im Spielstand war diese Gründung "
+                        "noch keine Option (Stufe jetzt aus dem Daten-Mod)")),
+                    "grund": ue("Spielstand ohne Besitzerliste für diese Gründung"), "offen": True})
     # Reihenfolge Militär (Regel des Ratgebers): erst die Ampel des Landes (grün, gelb, ohne Mod-Werte, rot), dann die meisten
     # benötigten Orte; Klientelländer, Verbündete und Oberherr gehören zur Diplomatie
     mil_besitzer = sorted((b for b in besitzer if not (b["untertan"] or b["verbuendet"] or b["oberherr"])),
@@ -1203,49 +1206,50 @@ def _empfehlungen(F, d, besitzer, ohne, fehlt, hand, eff, neu_rang, W, nm, besit
                      "ampel": b["ampel"]})
         summe += n
     for b in [b for b in besitzer if b["untertan"] or b["verbuendet"] or b["oberherr"]] + mil_besitzer:
-        orte = f"{b['orte']} benötigte{'r' if b['orte'] == 1 else ''} Ort{'e' if b['orte'] != 1 else ''} ({', '.join(b['beispiele'][:4])}{' …' if b['orte'] > 4 else ''})"
+        beispiele = f"{', '.join(b['beispiele'][:4])}{' …' if b['orte'] > 4 else ''}"
+        orte = ue(t"{b['orte']} benötigter Ort ({beispiele})") if b["orte"] == 1 else ue(t"{b['orte']} benötigte Orte ({beispiele})")
         if b["untertan"]:
-            dip.append({"text": f"{b['name']} eingliedern (Annexion): {orte}",
-                        "grund": "Klientelland – seine Orte zählen erst nach der Eingliederung (Annahme des Ratgebers)"})
+            dip.append({"text": ue(t"{b['name']} eingliedern (Annexion): {orte}"),
+                        "grund": ue("Klientelland – seine Orte zählen erst nach der Eingliederung (Annahme des Ratgebers)")})
             continue
         if b["verbuendet"]:
-            dip.append({"text": f"{b['name']} ist verbündet und besitzt {orte}",
-                        "grund": "Gegen einen Verbündeten erst nach Ende des Bündnisses vorgehen (Regel des Ratgebers)"})
+            dip.append({"text": ue(t"{b['name']} ist verbündet und besitzt {orte}"),
+                        "grund": ue("Gegen einen Verbündeten erst nach Ende des Bündnisses vorgehen (Regel des Ratgebers)")})
             continue
         if b["oberherr"]:
-            dip.append({"text": f"{b['name']} ist unser Oberherr und besitzt {orte}", "grund": "erst Unabhängigkeit (Regel des Ratgebers)"})
+            dip.append({"text": ue(t"{b['name']} ist unser Oberherr und besitzt {orte}"), "grund": ue("erst Unabhängigkeit (Regel des Ratgebers)")})
             continue
         grund = []
         if b["ampel"]:
-            grund.append({"gruen": "Ampel grün", "gelb": "Ampel gelb", "rot": "Ampel rot", "grau": "Ampel grau"}[b["ampel"]]
+            grund.append({"gruen": ue("Ampel grün"), "gelb": ue("Ampel gelb"), "rot": ue("Ampel rot"), "grau": ue("Ampel grau")}[b["ampel"]]
                          + (f" ({'; '.join(b['gruende'][:2])})" if b["gruende"] else ""))
         else:
-            grund.append("keine Mod-Werte zu diesem Land (keine Beziehung zu uns) – Stärke unbekannt"
-                         + (f"; Militär-Rang {b['mil_rang']} laut Spielstand" if b.get("mil_rang") else ""))
+            grund.append(ue("keine Mod-Werte zu diesem Land (keine Beziehung zu uns) – Stärke unbekannt")
+                         + (ue(t"; Militär-Rang {b['mil_rang']} laut Spielstand") if b.get("mil_rang") else ""))
         if b["waffenstillstand"] == 1:
-            grund.append("Waffenstillstand mit uns")
+            grund.append(ue("Waffenstillstand mit uns"))
         if b["kriegsgrund"]:
-            grund.append("Kriegsgrund vorhanden")
-        mil.append({"text": f"Von {b['name']} holen: {orte}", "grund": "; ".join(grund), "ampel": b["ampel"], "tag": b["tag"]})
+            grund.append(ue("Kriegsgrund vorhanden"))
+        mil.append({"text": ue(t"Von {b['name']} holen: {orte}"), "grund": "; ".join(grund), "ampel": b["ampel"], "tag": b["tag"]})
         if _num(b.get("buendnis_faktor")) and b["buendnis_faktor"] >= BUENDNIS_FAKTOR:
-            dip.append({"text": f"{b['name']} isolieren: Verteidigungsbündnis {_de(b['buendnis_faktor'], 1)}-mal so stark wie das Land allein",
-                        "grund": f"Daten-Mod (defensive_alliance_strength ÷ country_strength); ab {_de(BUENDNIS_FAKTOR, 1)}-fach erst Bündnisse "
-                                 "lösen oder eigene Verbündete gewinnen (Regel des Ratgebers)"})
+            dip.append({"text": ue(t"{b['name']} isolieren: Verteidigungsbündnis {_de(b['buendnis_faktor'], 1)}-mal so stark wie das Land allein"),
+                        "grund": ue(t"Daten-Mod (defensive_alliance_strength ÷ country_strength); ab {_de(BUENDNIS_FAKTOR, 1)}-fach erst Bündnisse "
+                                 t"lösen oder eigene Verbündete gewinnen (Regel des Ratgebers)")})
     if ohne and besitz_bekannt:
-        mil.append({"text": f"{ohne} benötigte Orte haben keinen Besitzer", "grund": "Spielstand: Ort ohne Besitzer", "offen": True})
+        mil.append({"text": ue(t"{ohne} benötigte Orte haben keinen Besitzer"), "grund": ue("Spielstand: Ort ohne Besitzer"), "offen": True})
     mods = rang_vergleich(W, F.get("rang"), neu_rang)
     if mods:
-        wirt.append({"text": f"Neuer Rang „{nm(neu_rang)}“: " + ", ".join(
+        wirt.append({"text": ue(t"Neuer Rang „{nm(neu_rang)}“: ") + ", ".join(
             f"{m['name']} {_wert(m['alt'], m)} → {_wert(m['neu'], m)}" for m in mods[:6]) + (" …" if len(mods) > 6 else ""),
-            "grund": "Spieldatei country_ranks (rank_modifier)"})
+            "grund": ue("Spieldatei country_ranks (rank_modifier)")})
     fs = fortschritte_fuer(W, d.get("tag"), nm)
     if fs:
-        wirt.append({"text": f"{len(fs)} Fortschritte nur für {nm(d.get('tag'))} werden erforschbar – die vergangener Zeitalter "
-                             "möglicherweise nicht mehr",
-                     "grund": "Spieldatei advances: potential nennt das Kürzel; readme dort: „advances do not become retroactively "
-                              "visible“ (Prüfer 30.10.)"})
-    wirt.append({"text": "Kosten der Gründung selbst: in den Spieldateien nicht angegeben – offen",
-                 "grund": "formable_countries enthält keinen Preis", "offen": True})
+        wirt.append({"text": ue(t"{len(fs)} Fortschritte nur für {nm(d.get('tag'))} werden erforschbar – die vergangener Zeitalter "
+                             t"möglicherweise nicht mehr"),
+                     "grund": ue("Spieldatei advances: potential nennt das Kürzel; readme dort: „advances do not become retroactively "
+                              "visible“ (Prüfer 30.10.)")})
+    wirt.append({"text": ue("Kosten der Gründung selbst: in den Spieldateien nicht angegeben – offen"),
+                 "grund": ue("formable_countries enthält keinen Preis"), "offen": True})
     return {"militaer": mil, "diplomatie": dip, "staat": staat, "wirtschaft": wirt,
             # Vorschlag für die fehlenden Orte in der Reihenfolge oben (Regel des Ratgebers); reicht nur, wenn summe >= fehlt
             "plan": {"schritte": plan, "summe": summe, "fehlt": fehlt} if plan else None}
@@ -1255,7 +1259,7 @@ def _wert(v, m):
     if v is None:
         return "–"
     if m.get("ja_nein") or isinstance(v, str):
-        return {"yes": "ja", "no": "nein"}.get(str(v), str(v))
+        return {"yes": ue("ja"), "no": ue("nein")}.get(str(v), str(v))
     if m.get("prozent"):
         return _pz(v, 0)
-    return _de(v, 2).rstrip("0").rstrip(",")
+    return _de(v, 2).rstrip("0").rstrip(sprache.KOMMA)

@@ -33,6 +33,7 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from . import ingame_tips as tips
 from . import sprache
+from .sprache import ue
 
 STRICH = "–"
 LANG = 30                   # Zeichen: längere Kopfwerte bekommen eine eigene Zeile über die ganze Breite
@@ -40,6 +41,13 @@ MAX_WERT = 70               # Zeichen: längere Kopfwerte gekürzt (voller Text 
 SEGMENTE = 10
 FARBE = tips.FARBE          # Platzhalter für „#“ der Farbcodes (#G … #!): übersteht ingame.loc, wird danach zu „#“
 SYM_A, SYM_E = "\x02", "\x03"   # Platzhalter für ein Text-Symbol „@name!“ (Mod 0.28): übersteht ingame.loc, wird dort umgesetzt
+# Spieltexte, aus denen die Kacheln Zahlen lesen, deutsch und englisch: RELIGION_REFORM_DESIRE, ESTATE_ECO_INFO_io_expense, MORALE_IMPACT_MAINTENANCE;
+# der Name des Erben trägt den Titel (game_concept_heir)
+REFORM_WERT = re.compile(r"(?:liegt bei| is)\s*([-+]?[\d.]+)%")
+REFORM_AENDERUNG = re.compile(r"(?:monatlich um|changing by)\s*([-+]?[\d.]+)%")
+ZEHNT = re.compile(r"(?:Zehnt|Tithe):\s*([-+]?[\d.]+)")
+MORAL_FAKTOR = re.compile(r"(?:multipliziert dies mit|multiplies it by)\s*([\d.]+)")
+ERBE_TITEL = re.compile(r"^(?:Erbe|Heir)\s+")
 
 # ---------------------------------------------------------------- Symbole (Mod 0.28)
 _ERLAUBT = {"rg": set(), "spiel": set()}       # eigene Symbole des installierten Mods, Symbole des Spiels (symbole_setzen)
@@ -142,6 +150,13 @@ KOPF_SYMBOL = {
     "Belagerungsfähigkeit": "army_strength"}
 
 
+def kopf_text(l):
+    """Bezeichnung eines Kopfwerts in der Sprache der Ausgabe. Im Code bleibt sie deutsch, sie ist Schlüssel von KOPF_SYMBOL; Zusätze in
+    Klammern („Gold (live 1356.10.1)“, „Kulturtradition (Bayerisch)“) bleiben stehen."""
+    kurz = re.sub(r" \(.*\)$", "", str(l))
+    return ue(str(l)) if kurz == l or l in sprache.katalog() else ue(kurz) + str(l)[len(kurz):]
+
+
 def kopf_symbol(l):
     """Symbol einer Kopfwert-Bezeichnung („Gold (live 1356.10.1)“ wie „Gold“)."""
     return sym(KOPF_SYMBOL.get(l) or KOPF_SYMBOL.get(re.sub(r" \(.*\)$", "", str(l))))
@@ -171,10 +186,10 @@ def ort_text(key, name=None):
 # ---------------------------------------------------------------- Links (Mod 0.28: nur öffnen, nie ausführen)
 LINK_TYPEN = ("ansicht", "bau", "ort", "land")
 # Seitenleisten des Spiels für OpenLateralView – nur Namen, die das Spiel selbst so aufruft (Test: grep in game/*/gui)
-ANSICHTEN = {"government": "Regierung", "laws": "Gesetze", "government_reforms": "Regierungsreformen", "advances": "Fortschritte",
-             "economy": "Wirtschaft", "production": "Produktion", "goods_overview": "Güter", "markets_overview": "Märkte",
-             "diplomacy": "Diplomatie", "form_new_country": "Ländergründung", "locations_list": "Orte",
-             "military_ledger": "Militär", "wars_ledger": "Kriege", "societal_values": "Gesellschaftswerte"}
+ANSICHTEN = {"government": ue("Regierung"), "laws": ue("Gesetze"), "government_reforms": ue("Regierungsreformen"), "advances": ue("Fortschritte"),
+             "economy": ue("Wirtschaft"), "production": ue("Produktion"), "goods_overview": ue("Güter"), "markets_overview": ue("Märkte"),
+             "diplomacy": ue("Diplomatie"), "form_new_country": ue("Ländergründung"), "locations_list": ue("Orte"),
+             "military_ledger": ue("Militär"), "wars_ledger": ue("Kriege"), "societal_values": ue("Gesellschaftswerte")}
 # Link-Typen je Kachel (Zeilen der Einzelheiten); fehlt eine Kachel, haben ihre Zeilen keinen Link
 LINKS = {"WPLAN": ("bau", "ort"), "SSTRAT": ("ansicht",), "FIN": ("ansicht",), "PROD": ("ort",), "HANDEL": ("ansicht",),
          "GUETER": ("ansicht",), "ORTE": ("ort",), "REG": ("ansicht",), "STAENDE": ("ansicht",), "FORSCH": ("ansicht",),
@@ -191,11 +206,11 @@ _TAG = re.compile(r"[A-Z][A-Z0-9]{2,5}")
 
 
 def ansicht(v):
-    return {"typ": "ansicht", "z": v, "o": "", "text": f"Klick: Fenster {ANSICHTEN[v]} öffnen"} if v in ANSICHTEN else None
+    return {"typ": "ansicht", "z": v, "o": "", "text": ue(t"Klick: Fenster {ANSICHTEN[v]} öffnen")} if v in ANSICHTEN else None
 
 
 def ort_link(key, name=None):
-    return ({"typ": "ort", "z": _ORT_ID[key], "o": "", "text": f"Klick: {name or key} auswählen, Karte dorthin"}
+    return ({"typ": "ort", "z": _ORT_ID[key], "o": "", "text": ue(t"Klick: {name or key} auswählen, Karte dorthin")}
             if key in _ORT_ID else None)
 
 
@@ -203,11 +218,11 @@ def bau_link(geb, geb_name, ort_key, ort_name=None):
     """Bau-Schritt: öffnet den Ort, dort lässt sich bauen (den Baumodus eines Gebäudetyps erreicht die Seitenleiste nicht, Test 0.28.1)."""
     if not (geb and _KEY.fullmatch(str(geb)) and ort_key in _ORT_ID):
         return None
-    return {"typ": "bau", "z": geb, "o": _ORT_ID[ort_key], "text": f"Klick: {ort_name or ort_key} öffnen, dort {geb_name or geb} bauen"}
+    return {"typ": "bau", "z": geb, "o": _ORT_ID[ort_key], "text": ue(t"Klick: {ort_name or ort_key} öffnen, dort {geb_name or geb} bauen")}
 
 
 def land_link(tag, name=None):
-    return ({"typ": "land", "z": tag, "o": "", "text": f"Klick: Diplomatie mit {name or tag}"}
+    return ({"typ": "land", "z": tag, "o": "", "text": ue(t"Klick: Diplomatie mit {name or tag}")}
             if tag and _TAG.fullmatch(str(tag)) else None)
 
 
@@ -215,7 +230,7 @@ def empf_link(r):
     """Link einer Empfehlung: mit Ort (Ausbau) der Ort, sonst über ihre Kachel; Krieg -> Kriege."""
     i = str(r.get("ort_id")) if r.get("ort_id") is not None else None
     if i in _ORT_ID.values():
-        return {"typ": "ort", "z": i, "o": "", "text": f"Klick: {r.get('ort') or 'Ort'} öffnen"}
+        return {"typ": "ort", "z": i, "o": "", "text": ue(t"Klick: {r.get('ort') or ue('Ort')} öffnen")}
     k = str(r.get("kachel") or "")
     return ansicht("wars_ledger" if k.startswith("krieg") else EMPF_ANSICHT.get(k))
 
@@ -337,7 +352,7 @@ def fmt(v, n=1):
 
 
 def pct(v, n=0):
-    return f"{fmt(v * 100, n)} %" if num(v) else STRICH
+    return ue(t"{fmt(v * 100, n)} %") if num(v) else STRICH
 
 
 def sgn(v, n=1):
@@ -388,7 +403,7 @@ def menge(t):
     if not m:
         return None
     x = float(m.group(1).replace(",", ""))
-    return f"{fmt(x, 2)} Mio." if m.group(2) == "M" else f"{fmt(x, 0)} Tsd." if m.group(2) == "K" else fmt(x, 0)
+    return ue(t"{fmt(x, 2)} Mio.") if m.group(2) == "M" else ue(t"{fmt(x, 0)} Tsd.") if m.group(2) == "K" else fmt(x, 0)
 
 
 def saldo_farbe(v, n=2):
@@ -533,11 +548,11 @@ def wirtschaftsplan(d, P, fk):
     gueter, fehlen, plan = F.get("gueter") or [], F.get("fehlen") or [], F.get("plan") or []
     # „Schwerpunkt“ steht in der Auswahl über den Reitern – nicht doppelt
     if not gueter:
-        k["kopf"].append(_kz("Bedarf", "keine Daten", "Für diesen Schwerpunkt fehlen im Spielstand die Werte (älterer Stand?)"))
+        k["kopf"].append(_kz("Bedarf", ue("keine Daten"), ue("Für diesen Schwerpunkt fehlen im Spielstand die Werte (älterer Stand?)")))
     elif F.get("reihung") == "knapp":
         kn = [r for r in gueter if r.get("knapp")][:3]
-        k["kopf"].append(_kz("knapp im Heimatmarkt", " · ".join(f"{gname(r['gut'])} {verh(r['gut'])}" for r in kn) or "keins – alles gedeckt",
-                             "Preis mindestens Grundpreis – Güter des Schwerpunkts mit dem größten Anteil × Preis/Grundpreis"))
+        k["kopf"].append(_kz("knapp im Heimatmarkt", " · ".join(f"{gname(r['gut'])} {verh(r['gut'])}" for r in kn) or ue("keins – alles gedeckt"),
+                             ue("Preis mindestens Grundpreis – Güter des Schwerpunkts mit dem größten Anteil × Preis/Grundpreis")))
     else:
         k["kopf"].append(_kz("vorne", " · ".join(gname(r["gut"]) for r in gueter[:3]) or STRICH))
     if fehlen:
@@ -555,16 +570,16 @@ def wirtschaftsplan(d, P, fk):
     k["details"] = [(str(p.get("nr")), geb_sym(p.get("gebaeude")) + (p.get("was") or STRICH), ort_text(ort_key(P, name=p.get("ort")), p.get("ort")),
                      _plan_tip(p), link(p))
                     for p in plan[1:]]
-    k["hinweis"] = (f"Weitere Schritte des Bauplans in dieser Reihenfolge ({len(plan) - 1}). Tooltip: Begründung, Wirkung, Kosten. Klick: "
-                    "Ort öffnen." if len(plan) > 1
-                    else "Keine weiteren Schritte im Bauplan." if plan else "")
+    k["hinweis"] = (ue(t"Weitere Schritte des Bauplans in dieser Reihenfolge ({len(plan) - 1}). Tooltip: Begründung, Wirkung, Kosten. Klick: "
+                    t"Ort öffnen.") if len(plan) > 1
+                    else ue("Keine weiteren Schritte im Bauplan.") if plan else "")
     return k
 
 
 def _plan_tip(p):
-    return "\n".join(x for x in (p.get("warum"), f"Wirkung: {p['wirkung']}" if p.get("wirkung") else "",
-                                 f"Voraussetzung: {p['voraussetzung']}" if p.get("voraussetzung") not in (None, "", "–") else "",
-                                 f"Kosten: {p['kosten']}" if p.get("kosten") else "") if x)
+    return "\n".join(x for x in (p.get("warum"), ue(t"Wirkung: {p['wirkung']}") if p.get("wirkung") else "",
+                                 ue(t"Voraussetzung: {p['voraussetzung']}") if p.get("voraussetzung") not in (None, "", "–") else "",
+                                 ue(t"Kosten: {p['kosten']}") if p.get("kosten") else "") if x)
 
 
 def startstrategie(d, P, fk):
@@ -579,14 +594,14 @@ def startstrategie(d, P, fk):
     # „Schwerpunkt“ (Auswahl), „1. Schritt“ (Erste Schritte unter dieser Kachel) und „Stand“ (Fuß) stehen schon in der Seitenleiste
     k["kopf"] = [
         _kz("Abweichungen", str(A["summe"]) if A.get("summe") is not None else STRICH,
-            f"Einstellungen, die vom Vorschlag abweichen: Kabinett {A.get('kabinett')}, Politlinien {A.get('gesetze')}, Privilegien "
-            f"{A.get('privilegien')}, Reform {A.get('reformen')}, Rivale {A.get('rivalen')}, Bündnis {A.get('buendnis')}"),
-        _kz("Politischer Einfluss", (fmt(S.get("einfluss"), 1) + (f" {sgn(S.get('einfluss_monat'), 2)}/Monat" if num(S.get("einfluss_monat")) else ""))
+            ue(t"Einstellungen, die vom Vorschlag abweichen: Kabinett {A.get('kabinett')}, Politlinien {A.get('gesetze')}, Privilegien "
+            t"{A.get('privilegien')}, Reform {A.get('reformen')}, Rivale {A.get('rivalen')}, Bündnis {A.get('buendnis')}")),
+        _kz("Politischer Einfluss", (fmt(S.get("einfluss"), 1) + (ue(t" {sgn(S.get('einfluss_monat'), 2)}/Monat") if num(S.get("einfluss_monat")) else ""))
             if num(S.get("einfluss")) else STRICH),
-        _kz("Kabinett", f"{len(kab.get('plaetze') or [])} Plätze" + (f", {kab['offen']} frei" if num(kab.get("offen")) and kab["offen"] else "")),
-        _kz("Rivalen", f"{fmt(D.get('rivalen_zahl'), 0)} von {fmt(D.get('rivalen_moeglich'), 0)}" if num(D.get("rivalen_zahl")) else STRICH)]
+        _kz("Kabinett", ue(t"{len(kab.get('plaetze') or [])} Plätze") + (ue(t", {kab['offen']} frei") if num(kab.get("offen")) and kab["offen"] else "")),
+        _kz("Rivalen", ue(t"{fmt(D.get('rivalen_zahl'), 0)} von {fmt(D.get('rivalen_moeglich'), 0)}") if num(D.get("rivalen_zahl")) else STRICH)]
     if not S.get("mit_mod"):
-        k["warn"].append("Ohne Werte des Daten-Mods: keine freien Plätze, Personen, Stände-Ziele, Bündnisstärken")
+        k["warn"].append(ue("Ohne Werte des Daten-Mods: keine freien Plätze, Personen, Stände-Ziele, Bündnisstärken"))
     # Einzelheiten: Gesellschaftswerte und erste Forschung (Kabinett, Politlinien, Privilegien, Reform, Rivale und Bündnis stehen
     # in der Tabelle „jetzt -> Vorschlag“ unter dieser Kachel – wie auf der Seite, startstrategie.js; Prüfung 03.11.)
     AX = {a.get("key"): a for a in (S.get("gesellschaft") or {}).get("achsen") or []}
@@ -596,26 +611,26 @@ def startstrategie(d, P, fk):
         def poln(p, a=a):
             return a.get("ln") if p == a.get("l") else a.get("rn") if p == a.get("r") else p
         jetzt = f"{fmt(g.get('wert'), 0)} ({poln(g['pol_jetzt'])} {fmt(abs(g['wert']), 0)})" if g.get("pol_jetzt") and num(g.get("wert")) \
-            else f"{fmt(g.get('wert'), 0)} (Mitte)"
-        tip = [f"{sgn(g['drift'], 2)}/Monat" + (f" -> {poln(g['richtung'])}, Grenze {fmt(g.get('grenze'), 1)}" if g.get("richtung") else "")
-               if num(g.get("drift")) else "", "zieht schon dorthin" if g.get("zieht_hin") is True else "zieht weg" if g.get("zieht_hin") is False else ""]
+            else ue(t"{fmt(g.get('wert'), 0)} (Mitte)")
+        tip = [ue(t"{sgn(g['drift'], 2)}/Monat") + (ue(t" -> {poln(g['richtung'])}, Grenze {fmt(g.get('grenze'), 1)}") if g.get("richtung") else "")
+               if num(g.get("drift")) else "", ue("zieht schon dorthin") if g.get("zieht_hin") is True else ue("zieht weg") if g.get("zieht_hin") is False else ""]
         tip += list(g.get("gruende") or [])[:2]
         k["details"].append((a.get("n") or g.get("achse") or STRICH, jetzt, g.get("pol_name") or STRICH, "\n".join(x for x in tip if x),
                              ansicht("societal_values")))
     for e in (F.get("forschung") or [])[:3]:
-        k["details"].append(("Forschung", "läuft" if e.get("laeuft") else STRICH,
-                             f"{e.get('name')} · Kosten {fmt(e.get('kosten'), 2) if num(e.get('kosten')) else STRICH} · "
-                             f"{fmt(e.get('monate'), 1) if num(e.get('monate')) else STRICH} Monate", e.get("grund") or "",
+        k["details"].append((ue("Forschung"), ue("läuft") if e.get("laeuft") else STRICH,
+                             ue(t"{e.get('name')} · Kosten {fmt(e.get('kosten'), 2) if num(e.get('kosten')) else STRICH} · "
+                             t"{fmt(e.get('monate'), 1) if num(e.get('monate')) else STRICH} Monate"), e.get("grund") or "",
                              ansicht("advances")))
-    k["hinweis"] = ("Gesellschaftswerte: die wichtigsten für den Schwerpunkt – Jetzt = Stand auf der Achse, Vorschlag = Richtung. "
-                    "Forschung: nächste Fortschritte mit Kosten und Dauer." if k["details"] else "")
+    k["hinweis"] = (ue("Gesellschaftswerte: die wichtigsten für den Schwerpunkt – Jetzt = Stand auf der Achse, Vorschlag = Richtung. "
+                    "Forschung: nächste Fortschritte mit Kosten und Dauer.") if k["details"] else "")
     return k
 
 
 # ---------------------------------------------------------------- Wirtschaft
-REG_AUS = (("army", "Heer"), ("navy", "Flotte"), ("fort", "Festungen"), ("court", "Hof"), ("diplomatic", "Diplomatie"),
-           ("cultural", "Kultur"), ("colonial", "Kolonien"), ("exploration", "Erkundung"), ("food", "Nahrung"),
-           ("upkeep", "Gebäude-Unterhalt"), ("bureaucracy", "Bürokratie"))
+REG_AUS = (("army", ue("Heer")), ("navy", ue("Flotte")), ("fort", ue("Festungen")), ("court", ue("Hof")), ("diplomatic", ue("Diplomatie")),
+           ("cultural", ue("Kultur")), ("colonial", ue("Kolonien")), ("exploration", ue("Erkundung")), ("food", ue("Nahrung")),
+           ("upkeep", ue("Gebäude-Unterhalt")), ("bureaucracy", ue("Bürokratie")))
 
 
 def finanzen(d, P):
@@ -646,9 +661,9 @@ def finanzen(d, P):
     def kopf_w(l, key, cur, gut):
         if S:
             return _kz(l, fmt(S[key], 2) + trend(vorm(S["ser"][key]), 2, gut),
-                       f"wie im Wirtschaftsfenster (Daten-Mod {S['datum']}); Klammer = Veränderung zum Vormonat",
-                       f"Spielstand {fmt(cur, 2)}" if num(cur) else "")
-        return _kz(l, fmt(cur, 2) + trend(vm(reihe[key], cur, (prev or {}).get(feld[key])), 2, gut), "Spielstand")
+                       ue(t"wie im Wirtschaftsfenster (Daten-Mod {S['datum']}); Klammer = Veränderung zum Vormonat"),
+                       ue(t"Spielstand {fmt(cur, 2)}") if num(cur) else "")
+        return _kz(l, fmt(cur, 2) + trend(vm(reihe[key], cur, (prev or {}).get(feld[key])), 2, gut), ue("Spielstand"))
     infl = live_reihe(d, "inflation")
     inf = lv.get("inflation") if lv.get("inflation") is not None else last.get("inflation")
     schuld = lv.get("debt_total")                 # ohne Daten-Mod unbekannt – nicht „0“ (Prüfung 03.11.)
@@ -656,8 +671,8 @@ def finanzen(d, P):
     # den vorigen Spielstand neben „+1,5“ in der Übersicht); nur ohne Mod gegen den vorigen Spielstand
     gold_d = (lv["gold"] - L2["gold"] if num(lv.get("gold")) and num(L2.get("gold"))
               else gold - gold_v if num(gold) and num(gold_v) else None)
-    gold_tip = ("Klammer = Veränderung zum Vormonat" if num(lv.get("gold")) and num(L2.get("gold"))
-                else f"Klammer = Veränderung zum vorigen Spielstand {prev.get('datum') or ''}".rstrip() if prev else "")
+    gold_tip = (ue("Klammer = Veränderung zum Vormonat") if num(lv.get("gold")) and num(L2.get("gold"))
+                else ue(t"Klammer = Veränderung zum vorigen Spielstand {prev.get('datum') or ''}").rstrip() if prev else "")
     # Warnung der Seite zu Inflation und Schulden hier als roter Kopfwert – nicht dieselbe Angabe doppelt (Prüfung 03.11.)
     k["kopf"] = [
         _kz(f"Gold (live {lv.get('datum')})" if live_neuer else "Gold", fmt(gold, 0) + trend(gold_d, 1, 1), gold_tip),
@@ -669,8 +684,8 @@ def finanzen(d, P):
         _kz("Schulden", rot(fmt(schuld, 0), num(schuld) and schuld > 0))]
     saldo_t = S["saldo"] if S else last.get("saldo")
     stab = lv.get("stability") if lv.get("stability") is not None else last.get("stabilitaet")
-    k["warn"] = [x for x in ("Saldo negativ" if num(saldo_t) and saldo_t < 0 else "",
-                             "Stabilität negativ" if num(stab) and stab < 0 else "") if x]
+    k["warn"] = [x for x in (ue("Saldo negativ") if num(saldo_t) and saldo_t < 0 else "",
+                             ue("Stabilität negativ") if num(stab) and stab < 0 else "") if x]
     # Einzelheiten: Ausgaben je Posten wie die Karte „Ausgaben und Regler“ (Kosten je Regler laut Spiel, Daten-Mod)
     F = (P["LD"].get("finanzen") or [None])[0]
     if F:
@@ -678,12 +693,12 @@ def finanzen(d, P):
             v = F.get("ki_" + key) if F.get("ki_" + key) is not None else F.get("k_" + key)
             return abs(v) if num(v) else 0
         zeilen = [(l, kosten(key), pct(F["p_" + key], 0) if F.get("p_" + key) is not None else "") for key, l in REG_AUS]
-        zeilen += [(l, v, "") for l, v in (("Söldner", lm.get("last_months_mercenary_maintenance")),
-                                           ("Seeleute", lm.get("last_months_sailor_expense"))) if num(v)]
+        zeilen += [(l, v, "") for l, v in ((ue("Söldner"), lm.get("last_months_mercenary_maintenance")),
+                                           (ue("Seeleute"), lm.get("last_months_sailor_expense"))) if num(v)]
         zeilen.sort(key=lambda z: -z[1])
         k["details"] = [(l, fmt(v, 2), r, "", ansicht("economy")) for l, v, r in zeilen if v][:8]
-        k["hinweis"] = (f"Ausgaben je Posten laut Spiel (Stand {P['LD'].get('extra_datum') or ''}), größter zuerst. Regler = Stellung des "
-                        "Reglers im Wirtschaftsfenster. Klick: Wirtschaftsfenster.")
+        k["hinweis"] = (ue(t"Ausgaben je Posten laut Spiel (Stand {P['LD'].get('extra_datum') or ''}), größter zuerst. Regler = Stellung des "
+                        t"Reglers im Wirtschaftsfenster. Klick: Wirtschaftsfenster."))
     return k
 
 
@@ -701,13 +716,13 @@ def produktion(d, P):
     tot = summe(t["gewinn"] for t in rows)
     minus = len([b for b in geb if (b.get("gewinn") or 0) < 0])
     g_ser = live_reihe(d, "gebaeude_gewinn")
-    k["kopf"] = [_kz("Gewinn der Gebäude / Monat", fmt(tot, 2) + trend(vorm(g_ser), 2, 1), "Summe Gewinn aller Gebäude live"),
+    k["kopf"] = [_kz("Gewinn der Gebäude / Monat", fmt(tot, 2) + trend(vorm(g_ser), 2, 1), ue("Summe Gewinn aller Gebäude live")),
                  _kz("Gebäude / Typen", f"{len(geb)} / {len(rows)}"),
-                 _kz("im Bau", str(len(P["A"].get("bau") or [])), "Bauprojekte laut Spielstand (Neubau und Ausbau)"),
+                 _kz("im Bau", str(len(P["A"].get("bau") or [])), ue("Bauprojekte laut Spielstand (Neubau und Ausbau)")),
                  _kz("bester Typ", f"{geb_sym(rows[0]['typ'])}{rows[0]['name']} {fmt(rows[0]['gewinn'], 2)}"),
                  _kz("schwächster Typ", f"{geb_sym(rows[-1]['typ'])}{rows[-1]['name']} {fmt(rows[-1]['gewinn'], 2)}")]
     if minus:
-        k["warn"] = [f"{minus} Gebäude mit Verlust"]
+        k["warn"] = [ue(t"{minus} Gebäude mit Verlust")]
     # Einzelheiten (Test 0.28: „details sollten besser dargestellt werden“): wo Geld verloren geht – Gebäude mit Verlust, größter
     # zuerst; gibt es keine, die mit dem geringsten Gewinn. Kleine Beträge mit drei Stellen (sonst „-0,00“), Verlust rot
     alle_g = sorted((b for b in geb if num(b.get("gewinn"))), key=lambda b: b["gewinn"])
@@ -718,13 +733,13 @@ def produktion(d, P):
         return rot(fmt(v, 3 if abs(v) < 0.01 else 2), v < 0)
     k["details"] = [(geb_sym(b.get("typ")) + (b.get("name") or b.get("typ") or STRICH),
                      ort_text(ort_key(P, b.get("ort_id"), b.get("ort")), b.get("ort")), gw(b["gewinn"]),
-                     f"Stufe {fmt(b.get('stufe'), 0)}" + (f", möglich {fmt(b['moeglich'], 2)}" if num(b.get("moeglich")) else "")
-                     + (f", Beschäftigte {fmt(b['besch'], 2)} von {fmt(b.get('plaetze'), 2)}" if num(b.get("besch")) else ""),
+                     ue(t"Stufe {fmt(b.get('stufe'), 0)}") + (ue(t", möglich {fmt(b['moeglich'], 2)}") if num(b.get("moeglich")) else "")
+                     + (ue(t", Beschäftigte {fmt(b['besch'], 2)} von {fmt(b.get('plaetze'), 2)}") if num(b.get("besch")) else ""),
                      ort_link(ort_key(P, b.get("ort_id"), b.get("ort")), b.get("ort")))
                     for b in schwach]
-    k["hinweis"] = ((f"Gebäude mit Verlust ({len(schwach)} von {len(verlust)}), größter Verlust zuerst" if verlust
-                     else "Gebäude mit dem geringsten Gewinn") + ": Gold je Monat, live. Tooltip: Stufe, möglicher Gewinn, Beschäftigte. "
-                    "Klick: Ort öffnen." if schwach else "")
+    k["hinweis"] = ((ue(t"Gebäude mit Verlust ({len(schwach)} von {len(verlust)}), größter Verlust zuerst") if verlust
+                     else ue("Gebäude mit dem geringsten Gewinn")) + ue(": Gold je Monat, live. Tooltip: Stufe, möglicher Gewinn, Beschäftigte. "
+                    "Klick: Ort öffnen.") if schwach else "")
     return k
 
 
@@ -745,43 +760,43 @@ def handel(d, P):
     S = _spiel_werte(d)
     if S and num(S["handel"]):
         k["kopf"].append(_kz("Handelseinkommen / Monat", fmt(S["handel"], 2) + trend(S["handelVorm"], 2, 1),
-                             f"wie im Wirtschaftsfenster: Gewinn der Routen × Modifikator Handelseinnahmen (Daten-Mod {S['datum']})",
-                             f"Spielstand {fmt(lm.get('monthly_trade_balance'), 2)}"))
+                             ue(t"wie im Wirtschaftsfenster: Gewinn der Routen × Modifikator Handelseinnahmen (Daten-Mod {S['datum']})"),
+                             ue(t"Spielstand {fmt(lm.get('monthly_trade_balance'), 2)}")))
     else:
         v = lm.get("monthly_trade_balance") if lm.get("monthly_trade_balance") is not None else lv.get("trade_income")
-        k["kopf"].append(_kz("Handelseinkommen / Monat", fmt(v, 2) + trend(vorm(ti_ser), 2, 1), "Spielstand"))
+        k["kopf"].append(_kz("Handelseinkommen / Monat", fmt(v, 2) + trend(vorm(ti_ser), 2, 1), ue("Spielstand")))
     # Routen live nur mit Handelsdaten des Daten-Mods – sonst nicht „0“ behaupten (Prüfung 03.11.: „Routen 0“ neben Einkommen 1,64)
     hat = "handel" in LD
     kap = lv.get("merchant_capacity")
-    genutzt = f"({fmt(own_h.get('genutzt'), 1)} genutzt)" if own_h and num(own_h.get("genutzt")) else ""
-    k["kopf"] += [_kz("Handelswert", fmt(lm.get("monthly_trade_value"), 1) + trend(vorm(hw_ser), 1, 1), "Spielstand monthly_trade_value"),
+    genutzt = ue(t"({fmt(own_h.get('genutzt'), 1)} genutzt)") if own_h and num(own_h.get("genutzt")) else ""
+    k["kopf"] += [_kz("Handelswert", fmt(lm.get("monthly_trade_value"), 1) + trend(vorm(hw_ser), 1, 1), ue("Spielstand monthly_trade_value")),
                   _kz("Gewinn der Routen", fmt(gew, 2) + trend(vorm(g_ser), 2, 1) if hat else STRICH,
-                      "Summe trade_profit (= EconomyView.GetTradeBalance)"),
+                      ue("Summe trade_profit (= EconomyView.GetTradeBalance)")),
                   _kz("Händlerkapazität", " ".join(x for x in (fmt(kap, 1) if num(kap) else "", genutzt) if x) or STRICH),
                   _kz("Routen", str(len(tr)) + trend(vorm(r_ser), 0, 1) if hat else STRICH)]
     HW = P["AW"].get("handel") or {}
     zoelle = [(HW.get(str(x.get("id"))) or {}).get("GetTariffValue") for x in tr]
     if any(num(z) and z != 0 for z in zoelle):
         k["kopf"].append(_kz("Zölle / Monat", sgn(summe(zoelle), 2),
-                             "Summe der Zölle aller Routen (ab 1.4); negativ = wir zahlen fremden Märkten Zoll; im Gewinn schon enthalten"))
+                             ue("Summe der Zölle aller Routen (ab 1.4); negativ = wir zahlen fremden Märkten Zoll; im Gewinn schon enthalten")))
     loss = len([x for x in tr if (x.get("profit") or 0) < 0])
     if loss:
-        k["warn"] = [f"{loss} Route(n) mit Verlust"]
+        k["warn"] = [ue(t"{loss} Route(n) mit Verlust")]
     if own_h and own_h.get("kapazitaet"):
-        k["balken"] = (f"Händlerkapazität im Heimatmarkt genutzt: {fmt(own_h.get('genutzt'), 1)} von {fmt(own_h['kapazitaet'], 1)}",
+        k["balken"] = (ue(t"Händlerkapazität im Heimatmarkt genutzt: {fmt(own_h.get('genutzt'), 1)} von {fmt(own_h['kapazitaet'], 1)}"),
                        (own_h.get("genutzt") or 0) / own_h["kapazitaet"])
     gn = ((P["W"].get("namen") or {}).get("gueter") or {})
     m_name = {**{str(a): b for a, b in (A.get("markt_namen") or {}).items()}, **{str(m.get("id")): m.get("name") for m in LD.get("maerkte") or []}}
 
     def richtung(x):
-        return "Einfuhr" if x.get("nach") == home else "Ausfuhr" if x.get("von") == home else "Durchhandel"
+        return ue("Einfuhr") if x.get("nach") == home else ue("Ausfuhr") if x.get("von") == home else ue("Durchhandel")
     k["details"] = [(gut_sym(x.get("gut")) + (gn.get(x.get("gut")) or x.get("gut_name") or x.get("gut") or STRICH), richtung(x),
                      fmt(x.get("profit"), 2),
-                     f"von {m_name.get(str(x.get('von')), x.get('von'))} nach {m_name.get(str(x.get('nach')), x.get('nach'))}; Menge "
-                     f"{fmt(x.get('volume'), 2)}, Einkauf {fmt(x.get('buy'), 2)}, Verkauf {fmt(x.get('sell'), 2)}",
+                     ue(t"von {m_name.get(str(x.get('von')), x.get('von'))} nach {m_name.get(str(x.get('nach')), x.get('nach'))}; Menge "
+                     t"{fmt(x.get('volume'), 2)}, Einkauf {fmt(x.get('buy'), 2)}, Verkauf {fmt(x.get('sell'), 2)}"),
                      ansicht("markets_overview")) for x in tr[:8]]
-    k["hinweis"] = (f"Deine Handelsrouten nach Gewinn (Stand {LD.get('extra_datum') or ''}). Richtung aus Sicht deines Heimatmarkts: "
-                    "Einfuhr = das Gut kommt herein, Ausfuhr = es geht hinaus. Tooltip: Märkte, Menge, Preise. Klick: Marktübersicht."
+    k["hinweis"] = (ue(t"Deine Handelsrouten nach Gewinn (Stand {LD.get('extra_datum') or ''}). Richtung aus Sicht deines Heimatmarkts: "
+                    t"Einfuhr = das Gut kommt herein, Ausfuhr = es geht hinaus. Tooltip: Märkte, Menge, Preise. Klick: Marktübersicht.")
                     if tr else "")
     return k
 
@@ -838,24 +853,24 @@ def gueter(d, P):
     prod3 = sorted([g for g in eigen if erz(g) > 0], key=lambda g: -erz(g))[:3]
     angeboten = sorted([g for g in goods if pos(preis(g)) and goods[g].get("default_market_price")], key=lambda g: -verh(g))
     k["kopf"] = [_kz("am meisten produziert", liste(prod3, lambda g: fmt(erz(g), 2)),
-                     "Förderung deiner Orte (live) + Herstellung deiner Gebäude (Nennwert: laufende Methode × Stufe)"),
+                     ue("Förderung deiner Orte (live) + Herstellung deiner Gebäude (Nennwert: laufende Methode × Stufe)")),
                  _kz("fehlen am meisten", liste(fehlend[:3], lambda g: fmt(saldo(g), 2)),
-                     "Saldo = Förderung + Herstellung − Verbrauch deiner Gebäude (Nennwerte); negativ = muss aus dem Markt kommen"),
+                     ue("Saldo = Förderung + Herstellung − Verbrauch deiner Gebäude (Nennwerte); negativ = muss aus dem Markt kommen")),
                  _kz("günstigste ggü. Grundpreis", liste(angeboten[-3:][::-1], lambda g: f"×{fmt(verh(g), 2)}"),
-                     "Preis live im Heimatmarkt ÷ Grundpreis, angebotene Güter"),
+                     ue("Preis live im Heimatmarkt ÷ Grundpreis, angebotene Güter")),
                  _kz("teuerste ggü. Grundpreis", liste(angeboten[:3], lambda g: f"×{fmt(verh(g), 2)}"),
-                     "Preis live im Heimatmarkt ÷ Grundpreis, angebotene Güter"),
-                 _kz("eigene Güter", str(len(eigen)), "Güter, die deine Orte fördern oder deine Gebäude herstellen oder verbrauchen"),
+                     ue("Preis live im Heimatmarkt ÷ Grundpreis, angebotene Güter")),
+                 _kz("eigene Güter", str(len(eigen)), ue("Güter, die deine Orte fördern oder deine Gebäude herstellen oder verbrauchen")),
                  _kz("Güter", str(len(goods)))]
     # Einzelheiten: weitere fehlende Güter (die ersten drei stehen im Kopf), dann die größten eigenen Mengen
     rest = fehlend[3:] + [g for g in sorted(eigen, key=lambda g: -erz(g)) if g not in fehlend and g not in prod3]
     k["details"] = [(gut_sym(g) + (gn.get(g) or g), saldo_farbe(saldo(g)),
                      f"×{fmt(verh(g), 2)}" if pos(preis(g)) and goods.get(g, {}).get("default_market_price") else STRICH,
-                     f"Förderung {fmt(foerd.get(g, 0), 2)}, Herstellung {fmt(herst.get(g, 0), 2)}", ansicht("goods_overview"))
+                     ue(t"Förderung {fmt(foerd.get(g, 0), 2)}, Herstellung {fmt(herst.get(g, 0), 2)}"), ansicht("goods_overview"))
                     for g in rest[:8]]
-    k["hinweis"] = ("Weitere eigene Güter: zuerst, was fehlt, dann deine größten Mengen. Saldo = Förderung + Herstellung − Verbrauch je "
+    k["hinweis"] = (ue("Weitere eigene Güter: zuerst, was fehlt, dann deine größten Mengen. Saldo = Förderung + Herstellung − Verbrauch je "
                     "Monat: rot = du verbrauchst mehr, als du erzeugst (es kommt aus dem Markt), grün = Überschuss. Preis : Grundpreis wie "
-                    "oben. Tooltip: Förderung und Herstellung. Klick: Güterübersicht." if k["details"] else "")
+                    "oben. Tooltip: Förderung und Herstellung. Klick: Güterübersicht.") if k["details"] else "")
     return k
 
 
@@ -884,27 +899,27 @@ def orte(d, P):
     def unterhalt(o):
         return lw(o)["GetTotalUpkeep"] if num(lw(o).get("GetTotalUpkeep")) else -o["L"]["building_profit"] if num(o["L"].get("building_profit")) else None
     k["kopf"] = [_kz("Steuergrundlage / möglich", f"{fmt(st, 1)} / {fmt(sm, 1)}",
-                     "Summe der Orte: Steuergrundlage gegen mögliche Steuergrundlage (Spielstand)"),
-                 _kz("fehlt durch Kontrolle", fmt(fs, 1), "mögliche Steuergrundlage − Steuergrundlage, Summe der Orte",
-                     f"{pct(fs / sm, 0)} der möglichen" if sm else ""),
+                     ue("Summe der Orte: Steuergrundlage gegen mögliche Steuergrundlage (Spielstand)")),
+                 _kz("fehlt durch Kontrolle", fmt(fs, 1), ue("mögliche Steuergrundlage − Steuergrundlage, Summe der Orte"),
+                     ue(t"{pct(fs / sm, 0)} der möglichen") if sm else ""),
                  _kz("Orte", str(len(alle))),
-                 _kz("Städte", f"{len([o for o in alle if stadt(o)])} von {len(alle)}", "Orte mit Stadtstatus (Spielwert HasCityStatus)"),
-                 _kz("Ø Nähe", fmt(p_avg, 0), "ungewichteter Durchschnitt der Orte"),
-                 _kz("Ø Marktzugriff", pct(m_avg, 0), "ungewichteter Durchschnitt der Orte"),
+                 _kz("Städte", ue(t"{len([o for o in alle if stadt(o)])} von {len(alle)}"), ue("Orte mit Stadtstatus (Spielwert HasCityStatus)")),
+                 _kz("Ø Nähe", fmt(p_avg, 0), ue("ungewichteter Durchschnitt der Orte")),
+                 _kz("Ø Marktzugriff", pct(m_avg, 0), ue("ungewichteter Durchschnitt der Orte")),
                  _kz("Gebäudeunterhalt", fmt(summe(unterhalt(o) for o in alle), 2) if AO or any(num(o["L"].get("building_profit")) for o in alle) else STRICH,
-                     "Unterhalt der Landesgebäude (Tempel, Marktplatz, Getreidespeicher, Kai, Burg …) aller Orte, Spielwert GetTotalUpkeep je Ort")]
+                     ue("Unterhalt der Landesgebäude (Tempel, Marktplatz, Getreidespeicher, Kai, Burg …) aller Orte, Spielwert GetTotalUpkeep je Ort"))]
     if sm:
-        k["balken"] = (f"Steuergrundlage: {pct(st / sm, 0)} der möglichen", st / sm)
+        k["balken"] = (ue(t"Steuergrundlage: {pct(st / sm, 0)} der möglichen"), st / sm)
 
     def fehlt(o):
         return o["moegliche_steuer"] - o["steuer"] if num(o.get("moegliche_steuer")) and num(o.get("steuer")) else None
     top = sorted([o for o in alle if num(fehlt(o))], key=lambda o: -fehlt(o))[:8]
     k["details"] = [(ort_text(o.get("key"), o.get("name")), f"{fmt(o.get('steuer'), 2)} / {fmt(o.get('moegliche_steuer'), 2)}",
                      pct(o["L"].get("control") if o["L"].get("control") is not None else o.get("kontrolle"), 0),
-                     f"fehlt {fmt(fehlt(o), 2)}; Nähe {fmt(prox(o), 0)}; Marktzugriff {pct(mkt(o), 0)}",
+                     ue(t"fehlt {fmt(fehlt(o), 2)}; Nähe {fmt(prox(o), 0)}; Marktzugriff {pct(mkt(o), 0)}"),
                      ort_link(o.get("key"), o.get("name"))) for o in top]
-    k["hinweis"] = ("Orte mit der größten Lücke: Steuergrundlage jetzt / möglich und Kontrolle in Prozent. Tooltip: fehlender Betrag, "
-                    "Nähe, Marktzugriff. Klick: Ort öffnen." if top else "")
+    k["hinweis"] = (ue("Orte mit der größten Lücke: Steuergrundlage jetzt / möglich und Kontrolle in Prozent. Tooltip: fehlender Betrag, "
+                    "Nähe, Marktzugriff. Klick: Ort öffnen.") if top else "")
     return k
 
 
@@ -922,20 +937,20 @@ def land(d, P):
     kap = summe(o.get("max_population") for o in P["LD"].get("orte") or [])
     tot = lv.get("population_total")
     k["kopf"] = [_kz("Bevölkerung (Tsd.)", fmt(tot, 2) + trend(lv.get("population_change"), 3, 1),
-                     "Summe der Pops in Tausend; Klammer = Veränderung im letzten Monat"),
-                 _kz("Bevölkerungskapazität genutzt", f"{pct(tot / kap, 0)} von {fmt(kap, 0)}" if kap and num(tot) else STRICH,
-                     "Bevölkerung ÷ Bevölkerungskapazität aller Orte"),
+                     ue("Summe der Pops in Tausend; Klammer = Veränderung im letzten Monat")),
+                 _kz("Bevölkerungskapazität genutzt", ue(t"{pct(tot / kap, 0)} von {fmt(kap, 0)}") if kap and num(tot) else STRICH,
+                     ue("Bevölkerung ÷ Bevölkerungskapazität aller Orte")),
                  _kz("Orte / Provinzen", f"{fmt(lv.get('locations'), 0)} / {fmt(lv.get('provinces'), 0)}"),
                  _kz("Ø Kontrolle", pct(lv.get("control_avg"), 0)
                      + trend((lv["control_avg"] - L2["control_avg"]) * 100 if num(lv.get("control_avg")) and num(L2.get("control_avg")) else None, 1, 1)),
                  _kz("Entwicklung", fmt(lv.get("development_total"), 0)
                      + trend(lv["development_total"] - L2["development_total"] if num(lv.get("development_total")) and num(L2.get("development_total")) else None, 2, 1)),
-                 _kz("Ø Bildung", f"{fmt(lv.get('literacy_avg'), 1)} %" if num(lv.get("literacy_avg")) else STRICH)]
+                 _kz("Ø Bildung", ue(t"{fmt(lv.get('literacy_avg'), 1)} %") if num(lv.get("literacy_avg")) else STRICH)]
     # Großmacht, Rang, Hauptstadt (/api/alles); Zufriedenheit, Kultur, Religion, Pop-Typ (/api/bevoelkerung)
     L, T, B = P["L"], P["TL"], P["B"]
     gp_rang, gp_punkte = erst(L.get("GetGreatPowerRank"), lv.get("great_power_rank")), erst(L.get("GetGreatPowerScore"), lv.get("great_power_score"))
     if num(gp_rang):
-        k["kopf"].append(_kz("Großmacht", f"{'Großmacht' if L.get('IsGreatPower') == 1 else 'Mittelmacht'} Platz {fmt(gp_rang, 0)} · {fmt(gp_punkte, 0)} Punkte"))
+        k["kopf"].append(_kz("Großmacht", ue(t"{ue('Großmacht') if L.get('IsGreatPower') == 1 else ue('Mittelmacht')} Platz {fmt(gp_rang, 0)} · {fmt(gp_punkte, 0)} Punkte")))
     cap_id = next((i for i, o in (P["AW"].get("ort") or {}).items() if o.get("IsCapital") == 1), None)
     cap = next((o for o in P["orte"] if str(o.get("id")) == cap_id), None)
     k["kopf"] += [_kz("Rang", str(T.get("GetFlavorRank") or "").strip() or STRICH), _kz("Hauptstadt", cap.get("name") if cap else STRICH)]
@@ -945,16 +960,16 @@ def land(d, P):
                       _kz("Staatsreligion", pct(summe(x.get("anteil") for x in B.get("religionen") or [] if x.get("staatsreligion")), 0)),
                       _kz("größter Pop-Typ", f"{B['typen'][0].get('name')} {pct(B['typen'][0].get('anteil'), 0)}")]
     if num(lv.get("population_change")) and lv["population_change"] < 0:
-        k["warn"] = ["Bevölkerung schrumpft"]
+        k["warn"] = [ue("Bevölkerung schrumpft")]
     if kap and num(tot):
-        k["balken"] = (f"Bevölkerungskapazität genutzt: {pct(tot / kap, 0)}", tot / kap)
+        k["balken"] = (ue(t"Bevölkerungskapazität genutzt: {pct(tot / kap, 0)}"), tot / kap)
     k["details"] = [(l, v, "", t) for l, v, t in (
-        ("Ø Kontrolle Kernregion", pct(lv.get("control_avg_home"), 1), "average_control_in_home_region"),
-        ("kontrollgewichtete Bevölkerung (Tsd.)", fmt(lv.get("control_pop"), 1), ""),
-        ("Großmacht-Platz", fmt(lv.get("great_power_rank"), 0), "Platz unter den Großmächten der Welt"),
-        ("Hauptkultur-Pops (Tsd.)", fmt(lv.get("pop_primary_culture"), 1), "Daten-Mod"),
-        ("Pops wahren Glaubens (Tsd.)", fmt(lv.get("pop_true_faith"), 1), "Daten-Mod")) if v != STRICH]
-    k["hinweis"] = f"Weitere Landeswerte, Stand {lv.get('datum') or ''}; Pops in Tausend." if k["details"] else ""
+        (ue("Ø Kontrolle Kernregion"), pct(lv.get("control_avg_home"), 1), "average_control_in_home_region"),
+        (ue("kontrollgewichtete Bevölkerung (Tsd.)"), fmt(lv.get("control_pop"), 1), ""),
+        (ue("Großmacht-Platz"), fmt(lv.get("great_power_rank"), 0), ue("Platz unter den Großmächten der Welt")),
+        (ue("Hauptkultur-Pops (Tsd.)"), fmt(lv.get("pop_primary_culture"), 1), ue("Daten-Mod")),
+        (ue("Pops wahren Glaubens (Tsd.)"), fmt(lv.get("pop_true_faith"), 1), ue("Daten-Mod"))) if v != STRICH]
+    k["hinweis"] = ue(t"Weitere Landeswerte, Stand {lv.get('datum') or ''}; Pops in Tausend.") if k["details"] else ""
     return k
 
 
@@ -967,42 +982,42 @@ def regierung(d, P):
     kab_live, kab_save = LD.get("kabinett") or [], A.get("kabinett") or []
     if ruler:
         k["kopf"].append(_kz("Herrscher (Verw./Dipl./Mil.)",
-                             f"{ruler.get('name')} {fmt(ruler.get('adm'), 0)} / {fmt(ruler.get('dip'), 0)} / {fmt(ruler.get('mil'), 0)} · {fmt(ruler.get('age'), 0)} J."))
+                             ue(t"{ruler.get('name')} {fmt(ruler.get('adm'), 0)} / {fmt(ruler.get('dip'), 0)} / {fmt(ruler.get('mil'), 0)} · {fmt(ruler.get('age'), 0)} J.")))
     kab_key = {x.get("aktion_name"): x.get("aktion") for x in kab_save}      # Name -> Schlüssel (Symbol, Mod 0.28)
     if kab_live:
         # Fortschritt nur, wenn die Aktion einen hat (Test 0.28: „Gesellschaftswerte ändern – %“)
         k["kopf"].append(_kz("Kabinett", " · ".join(f"{kab_sym(kab_key.get(x.get('aktion')))}{x.get('aktion')}"
-                                                    + (f" {fmt(x['fortschritt'], 0)} %" if num(x.get("fortschritt")) else "")
+                                                    + (ue(t" {fmt(x['fortschritt'], 0)} %") if num(x.get("fortschritt")) else "")
                                                     for x in kab_live)))
     elif kab_save:
         k["kopf"].append(_kz("Kabinett", " · ".join(kab_sym(x.get("aktion")) + (x.get("aktion_name") or STRICH) for x in kab_save)))
     if num(lv.get("ruler_reign")):
-        k["kopf"].append(_kz("Regierungszeit", f"{fmt(lv['ruler_reign'], 0)} {'Jahr' if lv['ruler_reign'] == 1 else 'Jahre'}"))
+        k["kopf"].append(_kz("Regierungszeit", f"{fmt(lv['ruler_reign'], 0)} {ue('Jahr') if lv['ruler_reign'] == 1 else ue('Jahre')}"))
     if ruler:
         # der Name des Spiels trägt den Titel („Erbe Valentin Basarab“) – unter der Bezeichnung „Erbe“ nicht doppelt
-        k["kopf"].append(_kz("Erbe", re.sub(r"^Erbe\s+", "", str(erbe.get("name"))) if erbe else "keiner"))
+        k["kopf"].append(_kz("Erbe", ERBE_TITEL.sub("", str(erbe.get("name"))) if erbe else ue("keiner")))
     if num(lv.get("complacency")):
-        k["kopf"].append(_kz("Selbstgefälligkeit", fmt(lv["complacency"], 2), "complacency laut Daten-Mod (bis 1.3)"))
+        k["kopf"].append(_kz("Selbstgefälligkeit", fmt(lv["complacency"], 2), ue("complacency laut Daten-Mod (bis 1.3)")))
     pe = lv.get("political_influence")
     pm = (d.get("startstrategie") or {}).get("einfluss_monat")      # = monthly_political_influence (Daten-Mod), wie die Seite
     if num(pe):
-        k["kopf"].append(_kz("Politischer Einfluss", fmt(pe, 1) + (f" {sgn(pm, 2)} / Monat" if num(pm) else ""),
-                             "political_influence laut Daten-Mod (ab 1.4)"))
+        k["kopf"].append(_kz("Politischer Einfluss", fmt(pe, 1) + (ue(t" {sgn(pm, 2)} / Monat") if num(pm) else ""),
+                             ue("political_influence laut Daten-Mod (ab 1.4)")))
     law = A.get("gesetze") or {}
     k["kopf"].append(_kz("Gesetze / Reformen", f"{len(law)} / {len(A.get('reformen') or [])}"
-                         + (f" ({fmt(lv['reform_slots_open'], 0)} frei)" if num(lv.get("reform_slots_open")) else "")))
+                         + (ue(t" ({fmt(lv['reform_slots_open'], 0)} frei)") if num(lv.get("reform_slots_open")) else "")))
     L = P["L"]
     if L.get("HasParliament") == 1:
         m_parl, tagt = L.get("months_since_last_parliament_called"), L.get("remaining_parliament_days")
-        wann = (f"tagt noch {fmt(tagt, 0)} Tage" if num(tagt) and tagt > 0 else "jetzt einberufbar" if num(m_parl) and m_parl > 59
-                else f"einberufbar in {fmt(60 - m_parl, 0)} Monaten" if num(m_parl) else "")
-        k["kopf"].append(_kz("Parlament", f"{fmt(L.get('num_of_active_parliament_agendas'), 0)} Vorhaben", wann))
+        wann = (ue(t"tagt noch {fmt(tagt, 0)} Tage") if num(tagt) and tagt > 0 else ue("jetzt einberufbar") if num(m_parl) and m_parl > 59
+                else ue(t"einberufbar in {fmt(60 - m_parl, 0)} Monaten") if num(m_parl) else "")
+        k["kopf"].append(_kz("Parlament", ue(t"{fmt(L.get('num_of_active_parliament_agendas'), 0)} Vorhaben"), wann))
     namen = W.get("namen") or {}
     lc, ln, rn = namen.get("gesetz_kategorien") or {}, namen.get("gesetze") or {}, namen.get("reformen") or {}
     k["details"] = ([(gesetz_sym(g) + (lc.get(g) or g), ln.get(p) or p, "", "", ansicht("laws")) for g, p in law.items()]
-                    + [("Reform", rn.get(r) or r, "", "", ansicht("government_reforms")) for r in A.get("reformen") or []])[:18]
-    k["hinweis"] = (f"Deine Gesetze (Bereich und eingestellte Politlinie) und Reformen laut Spielstand; {len(law)} Gesetze, "
-                    f"{len(A.get('reformen') or [])} Reformen. Klick: Gesetze bzw. Reformen." if law or A.get("reformen") else "")
+                    + [(ue("Reform"), rn.get(r) or r, "", "", ansicht("government_reforms")) for r in A.get("reformen") or []])[:18]
+    k["hinweis"] = (ue(t"Deine Gesetze (Bereich und eingestellte Politlinie) und Reformen laut Spielstand; {len(law)} Gesetze, "
+                    t"{len(A.get('reformen') or [])} Reformen. Klick: Gesetze bzw. Reformen.") if law or A.get("reformen") else "")
     return k
 
 
@@ -1027,12 +1042,12 @@ def staende(d, P):
     # Privilegien nur mit Stände-Daten des Daten-Mods – sonst nicht „0 von 0“ (Prüfung 03.11.)
     priv, moegl = ((summe(S.get("privileges_" + e) for e in ohne), summe(S.get("privileges_possible_" + e) for e in ohne)) if S
                    else (None, None))
-    k["kopf"] = [_kz("Steuern der Stände / Monat", fmt(steuern, 2), "Summe der Steuern aller Stände im letzten Monat"),
-                 _kz("Privilegien", f"{fmt(priv, 0)} von {fmt(moegl, 0)} möglich" if S else STRICH),
+    k["kopf"] = [_kz("Steuern der Stände / Monat", fmt(steuern, 2), ue("Summe der Steuern aller Stände im letzten Monat")),
+                 _kz("Privilegien", ue(t"{fmt(priv, 0)} von {fmt(moegl, 0)} möglich") if S else STRICH),
                  _kz("Ø Zufriedenheit der Stände", pct(lv.get("estate_satisfaction_avg"), 0),
-                     "Durchschnitt der Stände ohne Krone (average_estate_satisfaction)")]
+                     ue("Durchschnitt der Stände ohne Krone (average_estate_satisfaction)"))]
     if moegl:
-        k["balken"] = (f"Privilegien: {fmt(priv, 0)} von {fmt(moegl, 0)} möglich", priv / moegl)
+        k["balken"] = (ue(t"Privilegien: {fmt(priv, 0)} von {fmt(moegl, 0)} möglich"), priv / moegl)
     for e in ohne:
         st = next((x for x in A.get("staende") or [] if x.get("stand") == e), None)
         if not st and not num(S.get("privileges_possible_" + e)):
@@ -1040,10 +1055,10 @@ def staende(d, P):
         if not (S.get("privileges_possible_" + e) or steuer(e)):
             continue                                   # Stand ohne Privilegien und Steuern (Dhimmi, Stämme … im Land nicht da)
         k["details"].append((stand_sym(e) + (names.get(e) or e), fmt(steuer(e), 2),
-                             f"{fmt(S.get('privileges_' + e), 0)} von {fmt(S.get('privileges_possible_' + e), 0)}", "",
+                             ue(t"{fmt(S.get('privileges_' + e), 0)} von {fmt(S.get('privileges_possible_' + e), 0)}"), "",
                              ansicht("government")))
-    k["hinweis"] = ("Steuern, die der Stand im letzten Monat gezahlt hat (Spielstand), und gewährte von möglichen Privilegien. Klick: "
-                    "Regierungsfenster." if k["details"] else "")
+    k["hinweis"] = (ue("Steuern, die der Stand im letzten Monat gezahlt hat (Spielstand), und gewährte von möglichen Privilegien. Klick: "
+                    "Regierungsfenster.") if k["details"] else "")
     return k
 
 
@@ -1055,8 +1070,8 @@ def religion(d, P):
         return k
     # Warnung der Seite (Einigkeit unter 100 %) als roter Kopfwert – nicht doppelt (Prüfung 03.11.); gerundet auf 100 % nicht rot
     # (Test 0.28: 0,996 stand als rote „100 %“ da)
-    k["kopf"] = [_kz("Glaubenseinigkeit", rot(pct(lv["religious_unity"], 0), pct(lv["religious_unity"], 0) != "100 %"),
-                     "rot: unter 100 % (Warnung der Seite)"),
+    k["kopf"] = [_kz("Glaubenseinigkeit", rot(pct(lv["religious_unity"], 0), pct(lv["religious_unity"], 0) != pct(1, 0)),
+                     ue("rot: unter 100 % (Warnung der Seite)")),
                  _kz("Glaubenseinfluss", fmt(lv.get("religious_influence"), 1))]
     AW, AT, L, LM, TL = P["AW"], P["AT"], P["L"], P["LM"], P["TL"]
     if not AW:
@@ -1065,10 +1080,10 @@ def religion(d, P):
     R, TR = (AW.get("religion") or {}).get(rel) or {}, (AT.get("religion") or {}).get(rel) or {}
     # Reformwunsch wie im Spiel: „… liegt bei 0.00%. Der Reformwunsch ändert sich derzeit monatlich um +0.03%.“
     rd_txt = str(TR.get("GetReformDesireInfo") or "")
-    rd_m, rd_c = re.search(r"liegt bei\s*([-+]?[\d.]+)%", rd_txt), re.search(r"monatlich um\s*([-+]?[\d.]+)%", rd_txt)
-    k["kopf"].append(_kz("Reformwunsch", (f"{fmt(float(rd_m.group(1)), 2)} %" + (trend(float(rd_c.group(1)), 2, 0) if rd_c else "")) if rd_m else STRICH))
+    rd_m, rd_c = REFORM_WERT.search(rd_txt), REFORM_AENDERUNG.search(rd_txt)
+    k["kopf"].append(_kz("Reformwunsch", (ue(t"{fmt(float(rd_m.group(1)), 2)} %") + (trend(float(rd_c.group(1)), 2, 0) if rd_c else "")) if rd_m else STRICH))
     k["kopf"].append(_kz("Toleranz", f"{sgn(LM.get('tolerance_own'), 1)} / {sgn(LM.get('tolerance_heretic'), 1)} / {sgn(LM.get('tolerance_heathen'), 1)}",
-                         "eigener Glaube / Ketzer / Heiden"))
+                         ue("eigener Glaube / Ketzer / Heiden")))
     kulturen = (P["B"].get("kulturen") or [])
     prim = next((x.get("id") for x in kulturen if "Primary" in (x.get("status") or "")), None)
     prim = prim if prim is not None else next(iter(AW.get("kultur") or {}), None)
@@ -1077,22 +1092,22 @@ def religion(d, P):
         k["kopf"] += [_kz(f"Kulturtradition ({K['name']})", fmt(ab(erst(K.get("GetTradition"), K.get("cultural_tradition"))), 2) + trend(ab(K.get("GetTraditionChange")), 2, 1)),
                       _kz("Kultureinfluss", fmt(ab(erst(K.get("GetInfluence"), K.get("cultural_influence"))), 2) + trend(ab(K.get("GetInfluenceChange")), 2, 1))]
     laender = fmt(erst(R.get("GetNumCountries"), R.get("num_countries_in_religion")), 0)
-    k["kopf"].append(_kz("Gläubige weltweit", " ".join(x for x in (menge(TR.get("GetTotalPopulation")), f"in {laender} Ländern") if x)))
+    k["kopf"].append(_kz("Gläubige weltweit", " ".join(x for x in (menge(TR.get("GetTotalPopulation")), ue(t"in {laender} Ländern")) if x)))
     if R.get("HasCardinals") == 1:
-        k["kopf"].append(_kz("Kardinäle", f"{fmt(L.get('num_cardinals'), 0)} von {fmt(R.get('total_cardinals'), 0)}"))
+        k["kopf"].append(_kz("Kardinäle", ue(t"{fmt(L.get('num_cardinals'), 0)} von {fmt(R.get('total_cardinals'), 0)}")))
     if R.get("HasHolySites") == 1:
         heil = summe(o.get("location_num_holy_sites") for o in (AW.get("ort") or {}).values())
-        k["kopf"].append(_kz("Sakralstätten", f"{fmt(R.get('GetNumHolySites'), 0)} bei uns {fmt(heil, 0)}"))
-    zehnt = [float(m.group(1)) for t in (AT.get("stand") or {}).values() if (m := re.search(r"Zehnt:\s*([-+]?[\d.]+)", str(t.get("GetEconomyInfo") or "")))]
+        k["kopf"].append(_kz("Sakralstätten", ue(t"{fmt(R.get('GetNumHolySites'), 0)} bei uns {fmt(heil, 0)}")))
+    zehnt = [float(m.group(1)) for t in (AT.get("stand") or {}).values() if (m := ZEHNT.search(str(t.get("GetEconomyInfo") or "")))]
     if zehnt:
-        k["kopf"].append(_kz("Zehnt / Monat", fmt(-sum(zehnt), 2), "Summe des Postens „Zehnt“ der Stände (geht an das Papsttum)"))
+        k["kopf"].append(_kz("Zehnt / Monat", fmt(-sum(zehnt), 2), ue("Summe des Postens „Zehnt“ der Stände (geht an das Papsttum)")))
     if num(LM.get("monthly_religious_influence")):
         k["kopf"].append(_kz("Glaubenseinfluss / Monat", sgn(LM["monthly_religious_influence"], 2)))
     kap, kmax = erst(L.get("used_cultures_capacity"), L.get("GetTotalCultureCapacityUsed")), erst(L.get("GetCulturalCapacity"), LM.get("cultures_capacity"))
     if num(kap):
         k["kopf"].append(_kz("Akzeptierte Kulturen", f"{fmt(kap, 2)} / {fmt(kmax, 2)}"))
     if num(LM.get("global_pop_assimilation_speed_modifier")):
-        k["kopf"].append(_kz("Angleichungsrate", f"{sgn(LM['global_pop_assimilation_speed_modifier'] * 100, 0)} %"))
+        k["kopf"].append(_kz("Angleichungsrate", ue(t"{sgn(LM['global_pop_assimilation_speed_modifier'] * 100, 0)} %")))
     k["kopf"].append(_kz("Kunstwerke / Künstler", f"{fmt(erst(L.get('num_works_of_art'), L.get('GetNumWorksOfArt')), 0)} / {fmt(L.get('num_artists'), 0)}"))
     return k
 
@@ -1107,27 +1122,27 @@ def forschung(d, P):
     # laufende Forschung zeigt die Oberfläche als Spielwert (Name und Balken); „Forschung je Monat“ rechnet die Seite aus /api/alles,
     # derselbe Wert steht in d (techbaum_vorschlag.laufend.je_monat; Prüfung 03.11.: Walachei 1,15 = Seite)
     if fo:
-        k["kopf"].append(_kz("Fortschritte erforscht", str(fo.get("erforscht")), "Spielstand"))
+        k["kopf"].append(_kz("Fortschritte erforscht", str(fo.get("erforscht")), ue("Spielstand")))
     jm = ((d.get("techbaum_vorschlag") or {}).get("laufend") or {}).get("je_monat")
     k["kopf"].append(_kz("Forschung je Monat", fmt(jm, 2)))
     # eingeführt: Monatszeile (institutions_embraced = num_embraced_institutions der Seite); fehlt sie, nichts zeigen
-    k["kopf"].append(_kz("Institutionen eingeführt", f"{fmt(n_ein, 0)} von {fmt(len(inst), 0)}" if inst and num(n_ein) else STRICH,
-                         "eingeführt / Institutionen, die es in der Welt gibt"))
+    k["kopf"].append(_kz("Institutionen eingeführt", ue(t"{fmt(n_ein, 0)} von {fmt(len(inst), 0)}") if inst and num(n_ein) else STRICH,
+                         ue("eingeführt / Institutionen, die es in der Welt gibt")))
     z = (d.get("techbaum_vorschlag") or {}).get("zeitalter")
     if z:
         k["kopf"].append(_kz("Zeitalter", z))
     LM = P["LM"]
-    for l, m, t in (("Einführungskosten Institutionen", "embrace_institution_cost_modifier", "Land-Modifikator; über 0 = teurer"),
-                    ("Verbreitung Institutionen", "global_institution_growth_modifier", "Land-Modifikator; über 0 = schneller")):
+    for l, m, t in (("Einführungskosten Institutionen", "embrace_institution_cost_modifier", ue("Land-Modifikator; über 0 = teurer")),
+                    ("Verbreitung Institutionen", "global_institution_growth_modifier", ue("Land-Modifikator; über 0 = schneller"))):
         if num(LM.get(m)):
-            k["kopf"].append(_kz(l, f"{sgn(LM[m] * 100, 0)} %", t))
+            k["kopf"].append(_kz(l, ue(t"{sgn(LM[m] * 100, 0)} %"), t))
     if inst and num(n_ein):
-        k["balken"] = (f"Institutionen: {fmt(n_ein, 0)} von {len(inst)} eingeführt", n_ein / len(inst))
-    k["details"] = [(inst_sym(x.get("key")) + (x.get("name") or STRICH), "eingeführt" if x.get("eingefuehrt") else "entstanden"
-                     if x.get("entstanden") else "noch nicht entstanden", x.get("ursprung") or STRICH, "", ansicht("advances"))
+        k["balken"] = (ue(t"Institutionen: {fmt(n_ein, 0)} von {len(inst)} eingeführt"), n_ein / len(inst))
+    k["details"] = [(inst_sym(x.get("key")) + (x.get("name") or STRICH), ue("eingeführt") if x.get("eingefuehrt") else ue("entstanden")
+                     if x.get("entstanden") else ue("noch nicht entstanden"), x.get("ursprung") or STRICH, "", ansicht("advances"))
                     for x in inst[:8]]
-    k["hinweis"] = ("Institutionen der Welt laut Spielstand: bei uns eingeführt oder nur entstanden, Ursprung = Ort, an dem sie "
-                    "entstand. Klick: Fortschritte." if inst else "")
+    k["hinweis"] = (ue("Institutionen der Welt laut Spielstand: bei uns eingeführt oder nur entstanden, Ursprung = Ort, an dem sie "
+                    "entstand. Klick: Fortschritte.") if inst else "")
     return k
 
 
@@ -1148,7 +1163,7 @@ def krankheiten(d, P):
     ab = sorted(K.get("ausbrueche") or [], key=lambda a: _de_sort(name(a.get("krankheit"))))
     bd = K.get("schwarzer_tod")
     bd_ab = next((a for a in ab if a.get("id") == (bd or {}).get("ausbruch")), None)
-    markt = (P["A"].get("markt") or {}).get("zentrum") or "Heimatmarkt"
+    markt = (P["A"].get("markt") or {}).get("zentrum") or ue("Heimatmarkt")
     pop = live_reihe(d, "population_total")
     # Seuchenwiderstand, Tote, befallene eigene Orte wie die Seite aus den Werten des Daten-Mods (/api/alles: seucheland, seucheort,
     # disease_<k>) – der Spielstand liegt dahinter (Prüfung 03.11.: Masern in 2 Orten live, 0 im Spielstand)
@@ -1166,38 +1181,38 @@ def krankheiten(d, P):
     tote_live = [SL["tote_" + x] for x in reihe if num(SL.get("tote_" + x))]
     tote = sum(tote_live) if tote_live else K.get("tote_uns")
     gdr = P["LM"].get("global_disease_resistance")
-    k["kopf"] = [_kz("Seuchenwiderstand", f"{sgn(gdr * 100, 0)} %" if num(gdr) else STRICH, "Landes-Modifikator global_disease_resistance"),
+    k["kopf"] = [_kz("Seuchenwiderstand", ue(t"{sgn(gdr * 100, 0)} %") if num(gdr) else STRICH, ue("Landes-Modifikator global_disease_resistance")),
                  _kz("Tote durch Krankheiten", rot(_tote(tote), num(tote) and tote > 0),
-                     "Daten-Mod: Tote unseres Landes je Krankheit, Summe" if tote_live
-                     else f"Spielstand {(d.get('meta') or {}).get('datum') or ''}: Tote unseres Landes je Ausbruch, Summe"),
+                     ue("Daten-Mod: Tote unseres Landes je Krankheit, Summe") if tote_live
+                     else ue(t"Spielstand {(d.get('meta') or {}).get('datum') or ''}: Tote unseres Landes je Ausbruch, Summe")),
                  _kz("befallene eigene Orte", rot(f"{len(befallen)} / {len(P['orte'])}", bool(befallen))),
-                 _kz("laufende Ausbrüche (Welt)", str(len(ab)), "ohne endemische Malaria (zählt im Spiel nicht)"),
+                 _kz("laufende Ausbrüche (Welt)", str(len(ab)), ue("ohne endemische Malaria (zählt im Spiel nicht)")),
                  _kz("Bevölkerung (Tsd.)", fmt(pop[-1] if pop else None, 1) + trend(vorm(pop), 1, 0))]
     if bd:
-        k["kopf"].append(_kz("Schwarzer Tod", f"aktiv seit {bd.get('start') or ''}" + (f" · Ursprung {bd_ab.get('ursprung') or '?'} · {_tote(bd_ab.get('tote'))} Tote" if bd_ab else "")
-                             if bd.get("status") == "active" else "nicht aktiv"))
+        k["kopf"].append(_kz("Schwarzer Tod", ue(t"aktiv seit {bd.get('start') or ''}") + (ue(t" · Ursprung {bd_ab.get('ursprung') or '?'} · {_tote(bd_ab.get('tote'))} Tote") if bd_ab else "")
+                             if bd.get("status") == "active" else ue("nicht aktiv")))
     k["kopf"].append(_kz("in unserem Land", ", ".join(krank_sym(x) + name(x) for x in reihe if any(ausbr(o, x) > 0 for o in befallen))
-                         or "keine Krankheit ausgebrochen"))
-    k["warn"] = [f"{krank_sym(a.get('krankheit'))}{name(a.get('krankheit'))} im Markt {markt} ({a['orte_markt_anzahl']} Orte)"
+                         or ue("keine Krankheit ausgebrochen")))
+    k["warn"] = [ue(t"{krank_sym(a.get('krankheit'))}{name(a.get('krankheit'))} im Markt {markt} ({a['orte_markt_anzahl']} Orte)")
                  for a in ab if a.get("orte_markt_anzahl")]
     k["details"] = [(krank_sym(a.get("krankheit")) + name(a.get("krankheit")), f"{a.get('ursprung') or '?'}, {a.get('start') or STRICH}",
                      fmt(a.get("orte"), 0),
-                     f"Tote {_tote(a.get('tote'))} in {fmt(a.get('laender'), 0)} Ländern"
-                     + (f"; bei uns: {', '.join(o.get('name') for o in a.get('orte_uns') or [])}" if a.get("orte_uns") else ""))
+                     ue(t"Tote {_tote(a.get('tote'))} in {fmt(a.get('laender'), 0)} Ländern")
+                     + (ue(t"; bei uns: {', '.join(o.get('name') for o in a.get('orte_uns') or [])}") if a.get("orte_uns") else ""))
                     for a in sorted(ab, key=lambda a: -(a.get("orte") or 0))[:8]]
-    k["hinweis"] = (f"Laufende Ausbrüche laut Spielstand {(d.get('meta') or {}).get('datum') or ''}, die mit den meisten Orten zuerst: "
-                    "Ursprung und Beginn, Zahl der befallenen Orte weltweit (0 = zurzeit keine). Tooltip: Tote, Länder, eigene Orte."
+    k["hinweis"] = (ue(t"Laufende Ausbrüche laut Spielstand {(d.get('meta') or {}).get('datum') or ''}, die mit den meisten Orten zuerst: "
+                    t"Ursprung und Beginn, Zahl der befallenen Orte weltweit (0 = zurzeit keine). Tooltip: Tote, Länder, eigene Orte.")
                     if ab else "")
     return k
 
 
 # ---------------------------------------------------------------- Außen und Militär
 # Begriffe wie die Seite (app.js BEZIEHUNG, Spielbegriffe)
-BEZIEHUNG = {"nachbar": "Nachbar", "rivale": "Rivale", "krieg": "Krieg", "untertan": "Klientelland", "oberherr": "Oberherr",
-             "freund": "Befreundet", "feind": "Feindlich", "kb_ziel": "Kriegsgrund gegen sie", "kb_gegen_uns": "Kriegsgrund gegen uns",
-             "kriegsverbuendet": "Kriegsverbündeter", "koalition": "Koalition gegen uns", "union": "Personalunion", "heirat": "Staatsehe",
-             "grossmacht": "Großmacht", "annektiert_uns": "annektiert uns", "wir_annektieren": "wird annektiert",
-             "spion_bei_uns": "Spionagenetz bei uns", "hist_rivale": "historischer Rivale"}
+BEZIEHUNG = {"nachbar": ue("Nachbar"), "rivale": ue("Rivale"), "krieg": ue("Krieg"), "untertan": ue("Klientelland"), "oberherr": ue("Oberherr"),
+             "freund": ue("Befreundet"), "feind": ue("Feindlich"), "kb_ziel": ue("Kriegsgrund gegen sie"), "kb_gegen_uns": ue("Kriegsgrund gegen uns"),
+             "kriegsverbuendet": ue("Kriegsverbündeter"), "koalition": ue("Koalition gegen uns"), "union": ue("Personalunion"), "heirat": ue("Staatsehe"),
+             "grossmacht": ue("Großmacht"), "annektiert_uns": ue("annektiert uns"), "wir_annektieren": ue("wird annektiert"),
+             "spion_bei_uns": ue("Spionagenetz bei uns"), "hist_rivale": ue("historischer Rivale")}
 # Reihenfolge in der Tabelle Diplomatie und in der Spalte Beziehung: was uns am meisten angeht, zuerst
 BEZ_RANG = ("krieg", "rivale", "buendnis", "kriegsverbuendet", "union", "oberherr", "untertan", "koalition", "kb_gegen_uns", "kb_ziel",
             "heirat", "freund", "feind", "annektiert_uns", "wir_annektieren", "spion_bei_uns", "hist_rivale", "nachbar", "grossmacht")
@@ -1221,7 +1236,7 @@ def diplomatie(d, P):
     # zeigte sonst „Kriegsgegner: keine“ neben „Laufende Kriege 1“ (Nachbarn)
     hat = "diplomatie" in P["LD"]
     k["kopf"].append(_kz("Rivalen (ihre Meinung von uns)",
-                         (", ".join(f"{x.get('name')} {fmt(v(x, 'op_them'), 0)}" for x in rivals) or "keine") if hat else STRICH))
+                         (", ".join(f"{x.get('name')} {fmt(v(x, 'op_them'), 0)}" for x in rivals) or ue("keine")) if hat else STRICH))
     # Diplomaten, Kapazität, Ruf, Antagonismus (/api/alles) wie die Seite; Kapazität wie im Fenster aus der Liste der Beziehungen
     L, TD = P["L"], (P["AT"].get("dip") or {}).get(tag) or _erste(P["AT"].get("dip"))
     dipl, d_max = erst(L.get("dip_GetNumOfDiplomats"), L.get("num_of_diplomats")), L.get("dip_GetMaxNumOfDiplomats")
@@ -1236,22 +1251,22 @@ def diplomatie(d, P):
         k["kopf"].append(_kz("Diplomatieruf", sgn(P["LM"]["diplomatic_reputation"], 2)))
     antag, antag_z = L.get("dip_GetNumberOfCountriesWithAntagonismTowardsUs"), L.get("dip_GetNumberOfCountriesWithTimedAntagonismTowardsUs")
     if num(antag) or num(antag_z):
-        k["kopf"].append(_kz("Antagonismus gegen uns", f"{fmt(antag, 0)} Länder · zeitweilig {fmt(antag_z, 0)}"))
+        k["kopf"].append(_kz("Antagonismus gegen uns", ue(t"{fmt(antag, 0)} Länder · zeitweilig {fmt(antag_z, 0)}")))
     if not any(u.get("angliederung") for u in unter):
-        k["kopf"].append(_kz("Klientelländer", ", ".join(u.get("name") or STRICH for u in unter) or "keine"))
+        k["kopf"].append(_kz("Klientelländer", ", ".join(u.get("name") or STRICH for u in unter) or ue("keine")))
     # Bündnisse: nicht unter den Beziehungen des Mods, sondern aus den Verbündeten der Startstrategie (Test 0.28: Bulgarien fehlte)
     D = (d.get("startstrategie") or {}).get("diplomatie") or {}
     verb = set(D.get("verbuendete") or [])
     if hat and "verbuendete" in D:
-        k["kopf"].append(_kz("Bündnisse", ", ".join(D.get("verbuendete_namen") or []) or "keine"))
-    k["kopf"].append(_kz("Kriegsgegner", (", ".join(x.get("name") for x in wars) or "keine") if hat else STRICH))
+        k["kopf"].append(_kz("Bündnisse", ", ".join(D.get("verbuendete_namen") or []) or ue("keine")))
+    k["kopf"].append(_kz("Kriegsgegner", (", ".join(x.get("name") for x in wars) or ue("keine")) if hat else STRICH))
     if union:
         k["kopf"].append(_kz("Personalunion", ", ".join(x.get("name") for x in union)))
     if kb_ziel or kb_uns:
-        k["kopf"].append(_kz("Kriegsgründe", " · ".join(x for x in (f"gegen {', '.join(y.get('name') for y in kb_ziel)}" if kb_ziel else "",
-                                                                    f"gegen uns: {', '.join(y.get('name') for y in kb_uns)}" if kb_uns else "") if x)))
+        k["kopf"].append(_kz("Kriegsgründe", " · ".join(x for x in (ue(t"gegen {', '.join(y.get('name') for y in kb_ziel)}") if kb_ziel else "",
+                                                                    ue(t"gegen uns: {', '.join(y.get('name') for y in kb_uns)}") if kb_uns else "") if x)))
     if wars:
-        k["warn"] = [f"Krieg mit {', '.join(x.get('name') for x in wars)}"]
+        k["warn"] = [ue(t"Krieg mit {', '.join(x.get('name') for x in wars)}")]
 
     # Tabelle (Test 0.28: „marokko ist großmacht?“ – die Liste bestand aus fernen Großmächten, Nachbarn und Verbündete fehlten):
     # wie die Seite nur Länder mit echter Beziehung; „Großmacht“ allein ist keine Beziehung, solche Länder nennt der Hinweis
@@ -1266,17 +1281,17 @@ def diplomatie(d, P):
     nah = [x for x in dip if set(bez(x)) - {"grossmacht"}]
     fern = [x for x in dip if not set(bez(x)) - {"grossmacht"}]
     reihe = sorted(nah, key=lambda x: (rang(x), -(v(x, "op_them") or 0)))
-    k["details"] = [(x.get("name") or x.get("tag") or STRICH, ", ".join("Bündnis" if b == "buendnis" else BEZIEHUNG.get(b, b) for b in bez(x)),
-                     fmt(v(x, "op_them"), 0), f"unsere Meinung von ihnen {fmt(v(x, 'op_us'), 0)}; Stärke {fmt(x.get('country_strength'), 1)}",
+    k["details"] = [(x.get("name") or x.get("tag") or STRICH, ", ".join(ue("Bündnis") if b == "buendnis" else BEZIEHUNG.get(b, b) for b in bez(x)),
+                     fmt(v(x, "op_them"), 0), ue(t"unsere Meinung von ihnen {fmt(v(x, 'op_us'), 0)}; Stärke {fmt(x.get('country_strength'), 1)}"),
                      land_link(x.get("tag"), x.get("name"))) for x in reihe[:8]]
-    k["hinweis"] = (f"Länder mit Beziehung zu uns ({len(nah)}): Krieg, Rivalen und Bündnisse zuerst. Rechts ihre Meinung von uns. Tooltip: "
-                    "unsere Meinung von ihnen, Stärke. Klick: Diplomatie mit dem Land."
-                    + (f" Ferne Großmächte ohne Beziehung zu uns: {', '.join(str(x.get('name')) for x in fern)}." if fern else "")
+    k["hinweis"] = (ue(t"Länder mit Beziehung zu uns ({len(nah)}): Krieg, Rivalen und Bündnisse zuerst. Rechts ihre Meinung von uns. Tooltip: "
+                    t"unsere Meinung von ihnen, Stärke. Klick: Diplomatie mit dem Land.")
+                    + (ue(t" Ferne Großmächte ohne Beziehung zu uns: {', '.join(str(x.get('name')) for x in fern)}.") if fern else "")
                     if dip else "")
     return k
 
 
-AMPEL = {"gruen": "aussichtsreich", "gelb": "knapp", "rot": "nicht ratsam", "grau": "unbekannt"}
+AMPEL = {"gruen": ue("aussichtsreich"), "gelb": ue("knapp"), "rot": ue("nicht ratsam"), "grau": ue("unbekannt")}
 
 
 def nachbarn(d, P):
@@ -1286,9 +1301,9 @@ def nachbarn(d, P):
         return k
     wir = nb.get("wir") or {}
     gruen = [r for r in nb.get("laender") or [] if (r.get("bewertung") or {}).get("stufe") == "gruen"]
-    k["kopf"] = [_kz("Kriegsgelegenheiten", str(len(gruen)), ", ".join(r.get("name") for r in gruen) or "keine Ampel auf Grün"),
+    k["kopf"] = [_kz("Kriegsgelegenheiten", str(len(gruen)), ", ".join(r.get("name") for r in gruen) or ue("keine Ampel auf Grün")),
                  _kz("Unser Offensivbündnis", fmt(wir.get("offensive_alliance_strength"), 2),
-                     "Spielwert offensive_alliance_strength: wir samt allen, die wir in einen Angriffskrieg rufen können"),
+                     ue("Spielwert offensive_alliance_strength: wir samt allen, die wir in einen Angriffskrieg rufen können")),
                  _kz("Heer (Tsd. Mann)", fmt(wir.get("army_size"), 2)),
                  _kz("Mannstärke (Tsd.)", f"{fmt(wir.get('manpower'), 2)} / {fmt(wir.get('max_manpower'), 2)}"),
                  _kz("Verteidigungsbündnis", fmt(wir.get("defensive_alliance_strength"), 2)),
@@ -1296,9 +1311,9 @@ def nachbarn(d, P):
                  _kz("Gold / Saldo", f"{fmt(wir.get('gold'), 0)} / {sgn(wir.get('saldo'), 2)}"),
                  _kz("Laufende Kriege", str(wir.get("kriege") or 0))]
     mp, mx = wir.get("manpower"), wir.get("max_manpower")
-    k["warn"] = [x for x in (nb.get("veraltet") and f"{nb['veraltet']} – Ampel grau",
-                             wir.get("kriege") and f"Wir sind schon in {wir['kriege']} Krieg(en)",
-                             num(mp) and num(mx) and mx > 0 and mp < 0.5 * mx and "Unsere Mannstärke liegt unter der Hälfte") if x]
+    k["warn"] = [x for x in (nb.get("veraltet") and ue(t"{nb['veraltet']} – Ampel grau"),
+                             wir.get("kriege") and ue(t"Wir sind schon in {wir['kriege']} Krieg(en)"),
+                             num(mp) and num(mx) and mx > 0 and mp < 0.5 * mx and ue("Unsere Mannstärke liegt unter der Hälfte")) if x]
     rows = [r for r in nb.get("laender") or [] if r.get("standard")]
     rang = {"gruen": 0, "gelb": 1, "rot": 2, "grau": 3}
     rows.sort(key=lambda r: rang.get((r.get("bewertung") or {}).get("stufe"), 4))
@@ -1306,8 +1321,8 @@ def nachbarn(d, P):
                      fmt((r.get("bewertung") or {}).get("verhaeltnis"), 2),
                      "; ".join(((r.get("bewertung") or {}).get("gruende") or [])[:3]), land_link(r.get("tag"), r.get("name")))
                     for r in rows[:8]]
-    k["hinweis"] = ("Nachbarn, Kriegsgrund-Ziele und Rivalen: Bewertung des Ratgebers (aussichtsreich, knapp, nicht ratsam) und "
-                    "Stärke uns : sie. Tooltip: Gründe. Klick: Diplomatie mit dem Land." if rows else "")
+    k["hinweis"] = (ue("Nachbarn, Kriegsgrund-Ziele und Rivalen: Bewertung des Ratgebers (aussichtsreich, knapp, nicht ratsam) und "
+                    "Stärke uns : sie. Tooltip: Gründe. Klick: Diplomatie mit dem Land.") if rows else "")
     return k
 
 
@@ -1324,26 +1339,26 @@ def gruendung(d, P):
 
     def bed(o):
         return (f"{o.get('bedingungen_erfuellt')}/{o['bedingungen_alle']}" + (f" ({o['bedingungen_offen']} ?)" if o.get("bedingungen_offen") else "")
-                if o.get("bedingungen_alle") else "keine")
-    k["kopf"].append(_kz("Gründungen", str(len(O)), ", ".join(o.get("name") for o in O) or "keine infrage"))
+                if o.get("bedingungen_alle") else ue("keine"))
+    k["kopf"].append(_kz("Gründungen", str(len(O)), ", ".join(o.get("name") for o in O) or ue("keine infrage")))
     if wahl:
         gb = wahl.get("gebiet") or {}
-        k["kopf"] += [_kz("Gewählt", wahl.get("name") or STRICH, f"Grad {wahl.get('grad') or '?'}"),
+        k["kopf"] += [_kz("Gewählt", wahl.get("name") or STRICH, ue(t"Grad {wahl.get('grad') or '?'}")),
                       _kz("Orte (eigene / nötig)", f"{fmt(gb.get('unsere'), 0)} / {fmt(gb.get('noetig'), 0)}"),
                       _kz("Bedingungen", bed(wahl))]
         if gb.get("noetig"):
-            k["balken"] = (f"Orte {wahl.get('name')}: {fmt(gb.get('unsere'), 0)} von {fmt(gb['noetig'], 0)}", (gb.get("unsere") or 0) / gb["noetig"])
-    k["kopf"] += [_kz("Unser Grad", grad + (" kein gegründetes Land" if S.get("stufe") == 0 else ""), S.get("stufe_quelle") or ""),
-                  _kz("Spielregel", S.get("regel_name") or "unbekannt", "Spielregel „Gründbare Länder“ laut Spielstand"),
+            k["balken"] = (ue(t"Orte {wahl.get('name')}: {fmt(gb.get('unsere'), 0)} von {fmt(gb['noetig'], 0)}"), (gb.get("unsere") or 0) / gb["noetig"])
+    k["kopf"] += [_kz("Unser Grad", grad + (ue(" kein gegründetes Land") if S.get("stufe") == 0 else ""), S.get("stufe_quelle") or ""),
+                  _kz("Spielregel", S.get("regel_name") or ue("unbekannt"), ue("Spielregel „Gründbare Länder“ laut Spielstand")),
                   _kz("Kultur", S.get("kultur") or STRICH, ", ".join(S.get("kulturgruppen") or []))]
-    k["warn"] = [x for x in (any(o.get("gruendbar") for o in O) and f"Jetzt gründbar: {', '.join(o.get('name') for o in O if o.get('gruendbar'))}",
-                             G.get("spiel_extra") and f"Laut Spiel sichtbar, vom Ratgeber nicht als Option erkannt: {', '.join(x.get('name') for x in G['spiel_extra'])}",
-                             G.get("fehler_spielstand") and f"Spielstand-Auszug fehlerhaft: {G['fehler_spielstand']}") if x]
+    k["warn"] = [x for x in (any(o.get("gruendbar") for o in O) and ue(t"Jetzt gründbar: {', '.join(o.get('name') for o in O if o.get('gruendbar'))}"),
+                             G.get("spiel_extra") and ue(t"Laut Spiel sichtbar, vom Ratgeber nicht als Option erkannt: {', '.join(x.get('name') for x in G['spiel_extra'])}"),
+                             G.get("fehler_spielstand") and ue(t"Spielstand-Auszug fehlerhaft: {G['fehler_spielstand']}")) if x]
     k["details"] = [(o.get("name") or STRICH, f"{fmt((o.get('gebiet') or {}).get('unsere'), 0)} / {fmt((o.get('gebiet') or {}).get('noetig'), 0)}",
-                     bed(o), f"Grad {o.get('grad') or '?'}" + (f", neuer Rang {o['rang_neu_name']}" if o.get("rang_neu_name") else "")
-                     + (" – jetzt gründbar" if o.get("gruendbar") else ""), ansicht("form_new_country")) for o in O[:6]]
-    k["hinweis"] = ("Alle Gründungen, die infrage kommen: eigene / nötige Orte, erfüllte / alle Bedingungen. Tooltip: Grad, neuer Rang. "
-                    "Klick: Fenster Gründung." if O else "")
+                     bed(o), ue(t"Grad {o.get('grad') or '?'}") + (ue(t", neuer Rang {o['rang_neu_name']}") if o.get("rang_neu_name") else "")
+                     + (ue(" – jetzt gründbar") if o.get("gruendbar") else ""), ansicht("form_new_country")) for o in O[:6]]
+    k["hinweis"] = (ue("Alle Gründungen, die infrage kommen: eigene / nötige Orte, erfüllte / alle Bedingungen. Tooltip: Grad, neuer Rang. "
+                    "Klick: Fenster Gründung.") if O else "")
     return k
 
 
@@ -1359,48 +1374,48 @@ def militaer(d, P):
     L, TL = P["L"], P["TL"]
     # ohne Kriegsdaten des Daten-Mods die Kriege aus d (krieg.build, Spielstand) – nicht „keine“ behaupten (Prüfung 03.11.)
     if "krieg" in LD:
-        kriege = str(len(krieg)) if krieg else "seit Spielbeginn keiner" if nie else "keine"
+        kriege = str(len(krieg)) if krieg else ue("seit Spielbeginn keiner") if nie else ue("keine")
     else:
         kriege = str(len(d["kriege"])) if isinstance(d.get("kriege"), list) else STRICH
     k["kopf"] = [_kz("Militärstärke", fmt(lv.get("military_strength"), 2)),
-                 _kz("Kriege", kriege, "" if "krieg" in LD else "laut Spielstand"),
+                 _kz("Kriege", kriege, "" if "krieg" in LD else ue("laut Spielstand")),
                  _kz("Mannstärke", f"{fmt(erst(L.get('manpower'), lv.get('manpower')), 2)} / {fmt(erst(L.get('max_manpower'), lv.get('manpower_max')), 2)}",
-                     "in Tausend, wie in der Kopfzeile"),
+                     ue("in Tausend, wie in der Kopfzeile")),
                  _kz("Seeleute", f"{fmt(erst(L.get('sailors'), lv.get('sailors')), 2)} / {fmt(erst(L.get('max_sailors'), lv.get('sailors_max')), 2)}",
-                     "in Tausend, wie in der Kopfzeile")]
+                     ue("in Tausend, wie in der Kopfzeile"))]
     # wie das Militärfenster (app.js militaer, /api/alles): Aufgebote aus Spieltexten, Regulärtruppen und Schiffe, Traditionen, Moral
     if L:
         auf_pot = zahl(erst(TL.get("GetArmyLevyPotentialStrength"), TL.get("GetPotentialAndBeingRaisedArmyLevyBreakdown")))
         reg_max = L["expected_army_size"] * 1000 if num(L.get("expected_army_size")) else None
         reg = L["regular_army_size"] * 1000 if num(L.get("regular_army_size")) else None
         k["kopf"] += [_kz("Aufgebote", f"{fmt(zahl(TL.get('GetRaisedLevyStrength')), 0)} / {fmt(auf_pot, 0)}",
-                          "ausgehoben / möglich (Mann); laut Spiel nur im Krieg oder bei Rebellen auszuheben",
-                          f"Kampfkraft {fmt(L['potential_army_size'], 2)}" if num(L.get("potential_army_size")) else ""),
-                      _kz("Regulärtruppen", f"{fmt(reg, 0)} / {fmt(reg_max, 0)}", "stehendes Heer / Obergrenze (Mann)"),
+                          ue("ausgehoben / möglich (Mann); laut Spiel nur im Krieg oder bei Rebellen auszuheben"),
+                          ue(t"Kampfkraft {fmt(L['potential_army_size'], 2)}") if num(L.get("potential_army_size")) else ""),
+                      _kz("Regulärtruppen", f"{fmt(reg, 0)} / {fmt(reg_max, 0)}", ue("stehendes Heer / Obergrenze (Mann)")),
                       _kz("Schiffe", f"{fmt(erst(L.get('navy_size'), lv.get('navy_size')), 0)} / {fmt(erst(L.get('expected_navy_size'), L.get('GetExpectedNavySize')), 0)}",
-                          "Schiffe / erwartete Marinegröße"),
-                      _kz("Armeetradition", f"{fmt(ab(L.get('army_tradition')), 2)} %" + trend(L.get("curbal_army_tradition"), 2, 1), "Klammer = Veränderung je Monat"),
-                      _kz("Marinetradition", f"{fmt(ab(L.get('navy_tradition')), 2)} %" + trend(L.get("curbal_navy_tradition"), 2, 1)),
+                          ue("Schiffe / erwartete Marinegröße")),
+                      _kz("Armeetradition", ue(t"{fmt(ab(L.get('army_tradition')), 2)} %") + trend(L.get("curbal_army_tradition"), 2, 1), ue("Klammer = Veränderung je Monat")),
+                      _kz("Marinetradition", ue(t"{fmt(ab(L.get('navy_tradition')), 2)} %") + trend(L.get("curbal_navy_tradition"), 2, 1)),
                       _kz("Moral Heer / Flotte", f"{fmt(ab(L.get('GetDefaultLandMorale')), 2)} / {fmt(ab(L.get('GetDefaultNavalMorale')), 2)}"),
                       _kz("Festungsschwelle", f"{fmt(L.get('used_fort_limit'), 2)} / {fmt(L.get('GetFortLimit'), 2)}")]
         for l, m, n in (("Disziplin", "discipline", "%"), ("Kampf-Effizienz (Aufgebote)", "levy_combat_efficiency_modifier", "%"),
                         ("Militärtaktiken", "military_tactics", 2), ("Belagerungsfähigkeit", "siege_ability", "%")):
             if num(L.get("mod_" + m)):
-                k["kopf"].append(_kz(l, f"{sgn(L['mod_' + m] * 100, 1)} %" if n == "%" else fmt(L["mod_" + m], n), "wie im Militärfenster"))
+                k["kopf"].append(_kz(l, ue(t"{sgn(L['mod_' + m] * 100, 1)} %") if n == "%" else fmt(L["mod_" + m], n), ue("wie im Militärfenster")))
     kat = LD.get("katastrophe") or []
-    mf = re.search(r"multipliziert dies mit\s*([\d.]+)", str(TL.get("GetDefaultLandMoraleTooltip") or ""))
-    regler = ", ".join(f"{n} {pct(L[x], 0)}" for n, x in (("Heer", "army_maintenance"), ("Flotte", "navy_maintenance"), ("Festungen", "fort_maintenance")) if num(L.get(x)))
-    k["warn"] = [x for x in (krieg and f"{len(krieg)} Krieg(e)", kat and "Katastrophe aktiv",
-                             mf and float(mf.group(1)) < 1 and f"Moral × {fmt(float(mf.group(1)), 2)} durch Unterhalt (Regler {regler})") if x]
+    mf = MORAL_FAKTOR.search(str(TL.get("GetDefaultLandMoraleTooltip") or ""))
+    regler = ", ".join(f"{n} {pct(L[x], 0)}" for n, x in ((ue("Heer"), "army_maintenance"), (ue("Flotte"), "navy_maintenance"), (ue("Festungen"), "fort_maintenance")) if num(L.get(x)))
+    k["warn"] = [x for x in (krieg and ue(t"{len(krieg)} Krieg(e)"), kat and ue("Katastrophe aktiv"),
+                             mf and float(mf.group(1)) < 1 and ue(t"Moral × {fmt(float(mf.group(1)), 2)} durch Unterhalt (Regler {regler})")) if x]
     if num(lv.get("manpower")) and lv.get("manpower_max"):
-        k["balken"] = (f"Mannstärke {pct(lv['manpower'] / lv['manpower_max'], 0)} des Höchstwerts", lv["manpower"] / lv["manpower_max"])
+        k["balken"] = (ue(t"Mannstärke {pct(lv['manpower'] / lv['manpower_max'], 0)} des Höchstwerts"), lv["manpower"] / lv["manpower_max"])
     k["details"] = [(l, v, "", t) for l, v, t in (
-        ("Heer (Tsd. Mann)", fmt(lv.get("army_size"), 2), "army_size laut Daten-Mod"),
-        ("Regimenter", fmt(lv.get("regiments"), 0), ""),
-        ("Festungen", fmt(lv.get("forts"), 0), ""), ("Kriegsmüdigkeit", fmt(lv.get("war_exhaustion"), 2), ""),
-        ("Monate seit dem letzten Krieg", fmt(mw, 0), "")) if v != STRICH]
+        (ue("Heer (Tsd. Mann)"), fmt(lv.get("army_size"), 2), ue("army_size laut Daten-Mod")),
+        (ue("Regimenter"), fmt(lv.get("regiments"), 0), ""),
+        (ue("Festungen"), fmt(lv.get("forts"), 0), ""), (ue("Kriegsmüdigkeit"), fmt(lv.get("war_exhaustion"), 2), ""),
+        (ue("Monate seit dem letzten Krieg"), fmt(mw, 0), "")) if v != STRICH]
     k["details"] = [z + (ansicht("military_ledger"),) for z in k["details"]]
-    k["hinweis"] = f"Weitere Militärwerte, Stand {lv.get('datum') or ''}. Klick: Militärübersicht." if k["details"] else ""
+    k["hinweis"] = ue(t"Weitere Militärwerte, Stand {lv.get('datum') or ''}. Klick: Militärübersicht.") if k["details"] else ""
     return k
 
 
@@ -1431,7 +1446,7 @@ def _kurz(s):
 
 def leerwert(v):
     """Wert ohne Inhalt („–“, „– / –“, „– von –“) – die Seite zeigt dann einen Strich, die Seitenleiste nichts."""
-    return not re.sub(r"[–/\s%]|von", "", str(v or ""))
+    return not re.sub(r"[–/\s%]|" + ue("von"), "", str(v or ""))
 
 
 def packen(kopf, zeilen):
@@ -1441,7 +1456,7 @@ def packen(kopf, zeilen):
     for e in kopf:
         # Symbole zählen wie zwei Zeichen – auch das, das setzen() vor die Bezeichnung stellt (Prüfung 03.11.: 13 Bezeichnungen mit
         # 24–30 Zeichen plus Symbol passten sonst nicht in die halbe Zelle)
-        lang = max(len(_sichtbar(kopf_symbol(e[0]) + str(e[0]))), len(_sichtbar(e[1]))) > LANG
+        lang = max(len(_sichtbar(kopf_symbol(e[0]) + kopf_text(e[0]))), len(_sichtbar(e[1]))) > LANG
         if lang:
             out.append([e, None])
         elif offen is not None:
@@ -1460,7 +1475,7 @@ def setzen(t, kid, k, loc, fk=None):
     reihen, zuviel = packen(gefuellt, zeilen)
     # was nicht mehr in die Zeilen passt, im Tooltip der letzten Zelle statt still wegzufallen (Prüfung 03.11.)
     gezeigt = {id(x) for paar in reihen for x in paar if x}
-    rest = "\n".join(f"{x[0]}: {x[1]}".replace(FARBE, "") for x in gefuellt if id(x) not in gezeigt) if zuviel else ""
+    rest = "\n".join(f"{kopf_text(x[0])}: {x[1]}".replace(FARBE, "") for x in gefuellt if id(x) not in gezeigt) if zuviel else ""
     for r in range(1, zeilen + 1):
         paar = reihen[r - 1] if r <= len(reihen) else [None, None]
         for z, x in zip("AB", paar):
@@ -1468,10 +1483,10 @@ def setzen(t, kid, k, loc, fk=None):
             voll = str(w) != _kurz(w)
             letzte = rest and x is not None and x is (paar[1] or paar[0]) and r == len(reihen)
             # Bezeichnung mit dem Symbol des Spiels (Mod 0.28: KOPF_SYMBOL); loc setzt Farbe („#“) und Symbole („@…!“) um
-            t[f"RG_K_{kid}_K{r}{z}L{e}"] = loc(kopf_symbol(l) + l) if x else ""
+            t[f"RG_K_{kid}_K{r}{z}L{e}"] = loc(kopf_symbol(l) + kopf_text(l)) if x else ""
             t[f"RG_K_{kid}_K{r}{z}W{e}"] = loc(_kurz(w)) if x else ""
-            t[f"RG_K_{kid}_K{r}{z}T{e}"] = loc(tips.zeile("\n".join(y for y in ((f"{l}: {w}".replace(FARBE, "") if voll else ""), tt,
-                                                                               f"Weitere Werte:\n{rest}" if letzte else "") if y))) if x else ""
+            t[f"RG_K_{kid}_K{r}{z}T{e}"] = loc(tips.zeile("\n".join(y for y in ((f"{kopf_text(l)}: {w}".replace(FARBE, "") if voll else ""), tt,
+                                                                               ue(t"Weitere Werte:\n{rest}") if letzte else "") if y))) if x else ""
     # Warnungen wie auf der Seite; was ein Kopfwert schon sagt, färben die Kacheln rot statt zu warnen (rot())
     warn = [w for w in k["warn"] if w]
     for i in range(1, 4):
@@ -1520,7 +1535,7 @@ def texte(d, fokusse, loc):
             return f(d, P, *a)
         except Exception as ex:                    # noqa: BLE001 – eine Kachel darf die übrigen nicht verhindern
             k = _leer()
-            k["warn"] = [f"Fehler beim Auswerten: {type(ex).__name__}"]
+            k["warn"] = [ue(t"Fehler beim Auswerten: {type(ex).__name__}")]
             return k
     for kid, f in FEST.items():
         setzen(t, kid, sicher(f), loc)

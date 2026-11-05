@@ -20,47 +20,48 @@ laufenden Produktionsmethode und Belegschaft.
 import collections
 
 from . import bauplan
+from .sprache import ue
 
 ORTSARTEN = ("rural_settlement", "town", "city", "megalopolis")
 # Schwerpunkte: Name, Erklärung (Seite), Reihung (knapp = Anteil × Preis/Grundpreis, wert = nur Anteil), Modifikatoren der
 # Gebäude mit Wirkung (building_types modifier / capital_modifier)
 FOKUS = {
-    "grundwirtschaft": ("Grundwirtschaft aufbauen", "Güter nach ihrem Marktwert im Heimatmarkt (Preis × Nachfrage), gereiht nach "
-                        "Knappheit.", "knapp", ()),
-    "gewinn": ("Gewinn und Steuergrundlage", "Güter, deren für uns baubare Gebäude (bei uns vorhanden oder freigeschaltet) am meisten "
-               "verdienen – Gewinn je Stufe laut Spielstand, Quelle je Zeile; Gewinn wird Reichtum und damit Steuergrundlage.",
+    "grundwirtschaft": ("Grundwirtschaft aufbauen", ue("Güter nach ihrem Marktwert im Heimatmarkt (Preis × Nachfrage), gereiht nach "
+                        "Knappheit."), "knapp", ()),
+    "gewinn": ("Gewinn und Steuergrundlage", ue("Güter, deren für uns baubare Gebäude (bei uns vorhanden oder freigeschaltet) am meisten "
+               "verdienen – Gewinn je Stufe laut Spielstand, Quelle je Zeile; Gewinn wird Reichtum und damit Steuergrundlage."),
                "wert", ()),
-    "bevoelkerung": ("Bevölkerungswachstum", "Nahrungsgüter nach ihrem Nahrungswert (Spieldatei goods: food), gereiht nach "
-                     "Knappheit; dazu Gebäude mit Wirkung auf Wachstum, Bevölkerungsgrenze, Nahrung und Zuzug.", "knapp",
+    "bevoelkerung": ("Bevölkerungswachstum", ue("Nahrungsgüter nach ihrem Nahrungswert (Spieldatei goods: food), gereiht nach "
+                     "Knappheit; dazu Gebäude mit Wirkung auf Wachstum, Bevölkerungsgrenze, Nahrung und Zuzug."), "knapp",
                      ("local_population_growth", "local_clergy_pop_growth", "local_population_capacity",
                       "local_population_capacity_modifier", "local_monthly_food", "local_monthly_food_modifier",
                       "local_food_capacity", "local_migration_attraction")),
-    "landheer": ("Landarmee-Güter", "Güter für Aufstellung und Unterhalt der Regimenter, die das Land freigeschaltet hat "
+    "landheer": ("Landarmee-Güter", ue("Güter für Aufstellung und Unterhalt der Regimenter, die das Land freigeschaltet hat "
                  "(unlock_unit der erforschten Fortschritte; goods_demand regiment_construction/regiment_maintenance), gereiht nach "
-                 "Knappheit; dazu Gebäude mit Wirkung auf Rekrutierung und Mannstärke.", "knapp",
+                 "Knappheit; dazu Gebäude mit Wirkung auf Rekrutierung und Mannstärke."), "knapp",
                  ("local_manpower", "can_recruit_regiment_in_this_location", "max_regiments_trained_at_same_time",
                   "local_levy_size_modifier", "manpower_to_building_owner")),
-    "marine": ("Marine-Güter", "Güter für Bau und Unterhalt der Schiffe, die das Land freigeschaltet hat (unlock_unit der erforschten "
+    "marine": ("Marine-Güter", ue("Güter für Bau und Unterhalt der Schiffe, die das Land freigeschaltet hat (unlock_unit der erforschten "
                "Fortschritte; goods_demand ship_construction/ship_maintenance), gereiht nach Knappheit; dazu Gebäude mit Wirkung "
-               "auf Werften und Seeleute.", "knapp",
+               "auf Werften und Seeleute."), "knapp",
                ("local_sailors", "can_build_ships_in_this_location", "max_ships_built_at_same_time", "local_ship_build_speed",
                 "local_navy_levy_size_modifier", "sailors_to_building_owner")),
-    "expansion": ("Erkunden und Kolonisieren", "Güter für Kolonien, Kolonie-Charter, Erkundung zu Land und See und Konquistadoren "
+    "expansion": ("Erkunden und Kolonisieren", ue("Güter für Kolonien, Kolonie-Charter, Erkundung zu Land und See und Konquistadoren "
                   "(goods_demand colony_construction, simple_colony_construction, colonial_charter_maintenance, "
-                  "create_land/sea_exploration, create_conquistador), gereiht nach Knappheit.", "knapp", ()),
-    "export": ("Exportwirtschaft aufbauen", "Güter, die in Märkten in Reichweite teurer sind als bei uns: Preisvorteil × Nachfrage "
-               "dort (Spielstand) – ohne Transportkosten und Zölle.", "wert", ()),
-    "import": ("Importwirtschaft (Veredelung)", "Güter, die wir herstellen können und deren Eingangsgüter in Märkten in Reichweite "
+                  "create_land/sea_exploration, create_conquistador), gereiht nach Knappheit."), "knapp", ()),
+    "export": ("Exportwirtschaft aufbauen", ue("Güter, die in Märkten in Reichweite teurer sind als bei uns: Preisvorteil × Nachfrage "
+               "dort (Spielstand) – ohne Transportkosten und Zölle."), "wert", ()),
+    "import": ("Importwirtschaft (Veredelung)", ue("Güter, die wir herstellen können und deren Eingangsgüter in Märkten in Reichweite "
                "billiger sind als bei uns: Einkaufsvorteil je Einheit der günstigsten Produktionsmethode einer für uns baubaren "
-               "Gebäudeart (Spielstand, Spieldateien) – ohne Transportkosten und Zölle; nur Güter mit Preis im Heimatmarkt.",
+               "Gebäudeart (Spielstand, Spieldateien) – ohne Transportkosten und Zölle; nur Güter mit Preis im Heimatmarkt."),
                "wert", ()),
-    "bau": ("Baugüter", "Güter für den Bau der Gebäudearten, die wir bauen können (construction_demand je Gebäudeart gleich gewichtet), "
-            "für Stadtrechte und für Straßen (Schotter, gepflastert), gereiht nach Knappheit.", "knapp", ()),
-    "verwaltung": ("Verwaltung und Hof", "Güter für Regierungshandlungen – Privilegien, Kabinett, Institutionen, Reformen, "
+    "bau": ("Baugüter", ue("Güter für den Bau der Gebäudearten, die wir bauen können (construction_demand je Gebäudeart gleich gewichtet), "
+            "für Stadtrechte und für Straßen (Schotter, gepflastert), gereiht nach Knappheit."), "knapp", ()),
+    "verwaltung": ("Verwaltung und Hof", ue("Güter für Regierungshandlungen – Privilegien, Kabinett, Institutionen, Reformen, "
                    "Hauptstadt (goods_demand government_activities) – und den Unterhalt der Bürokratie (bureaucracy_maintenance), "
-                   "gereiht nach Knappheit.", "knapp", ()),
-    "lebensstandard": ("Lebensstandard der Pops", "Güter nach dem Verbrauch der Pops im Heimatmarkt (Spielstand: Verbrauch „Pops“ × "
-                       "Preis), gereiht nach Knappheit – gedeckter Bedarf hält die Stände zufrieden.", "knapp", ()),
+                   "gereiht nach Knappheit."), "knapp", ()),
+    "lebensstandard": ("Lebensstandard der Pops", ue("Güter nach dem Verbrauch der Pops im Heimatmarkt (Spielstand: Verbrauch „Pops“ × "
+                       "Preis), gereiht nach Knappheit – gedeckter Bedarf hält die Stände zufrieden."), "knapp", ()),
 }
 REGIERUNG_BAU = ("build_town_demand", "build_city_demand", "build_megalopolis_demand")
 STRASSEN = ("road_maintenance", "maintain_gravel_road_demand", "maintain_paved_road_demand")
@@ -386,14 +387,14 @@ def build(last, wis, voll_get, gs, geb_werte=None, ort_werte=None, rgo_kosten=No
         sonst Schätzung über die Unterhaltsgüter, geeicht an unseren Gebäuden mit Spielwert."""
         ist = unterhalt_ist(art)
         if ist:
-            return f"{bauplan._fmt(ist, 3)} Gold/Monat je Stufe (Spielwert)"
+            return ue(t"{bauplan._fmt(ist, 3)} Gold/Monat je Stufe (Spielwert)")
         roh = unterhalt_roh(art)
         if roh and faktor:
-            return (f"≈ {bauplan._fmt(roh * faktor, 3)} Gold/Monat je Stufe (Schätzung: Unterhaltsgüter × Marktpreis × "
-                    f"{bauplan._fmt(faktor, 2)}, geeicht an {len(quoten)} eigenen Gebäudearten)")
+            return (ue(t"≈ {bauplan._fmt(roh * faktor, 3)} Gold/Monat je Stufe (Schätzung: Unterhaltsgüter × Marktpreis × "
+                    t"{bauplan._fmt(faktor, 2)}, geeicht an {len(quoten)} eigenen Gebäudearten)"))
         g = {x: m for pm in (wis["gebaeude"].get(art) or {}).get("pms") or [] if not pm.get("produced")
              for x, m in (pm.get("inputs") or {}).items()}
-        return ("Unterhaltsgüter je Stufe: " + ", ".join(f"{G.get(x, {}).get('name') or x} {bauplan._fmt(m)}" for x, m in g.items())) if g else None
+        return (ue("Unterhaltsgüter je Stufe: ") + ", ".join(f"{G.get(x, {}).get('name') or x} {bauplan._fmt(m)}" for x, m in g.items())) if g else None
 
     def modtxt(m, v):
         t = mt.get(m) or {}
@@ -404,9 +405,9 @@ def build(last, wis, voll_get, gs, geb_werte=None, ort_werte=None, rgo_kosten=No
             return f"{n} {v}"
         if t.get("percent") == "yes":
             v = v * 100
-            return f"{n} {bauplan._sgn(v, 0 if float(v).is_integer() else 1)} %"
+            return ue(t"{n} {bauplan._sgn(v, 0 if float(v).is_integer() else 1)} %")
         # Mannstärke/Garnison/Seeleute (FormatManPower) und Bevölkerungsgrenze (FormatPopCaps) zählen in Tausend wie Pops
-        tsd = " Tsd." if ((t.get("game_data") or {}).get("format") in ("FormatManPower", "FormatPopCaps")) else ""
+        tsd = ue(" Tsd.") if ((t.get("game_data") or {}).get("format") in ("FormatManPower", "FormatPopCaps")) else ""
         return f"{n} {bauplan._sgn(v, 0 if abs(v) >= 10 else 2 if abs(v) >= 0.1 else 3)}{tsd}"
 
     plan_ctx = {"G": G, "GEB": GEB, "gs": gs, "nm": nm, "bt": bt, "wis": wis, "orte": bauplan.ortsfakten(last, wis, ort_werte),
@@ -477,7 +478,7 @@ def build(last, wis, voll_get, gs, geb_werte=None, ort_werte=None, rgo_kosten=No
                 GEB[a]["wirkung_hauptstadt"].update({x: v for x, v in c.items() if x in fmods})
                 wirkung.append(a)
         out["fokusse"][key] = {
-            "name": name, "erklaerung": erkl, "reihung": reihung, "gueter": im, "fehlen": fehlt, "ketten": ketten,
+            "name": ue(name), "erklaerung": erkl, "reihung": reihung, "gueter": im, "fehlen": fehlt, "ketten": ketten,
             "eingang": eingang, "modifikatoren": list(fmods),
             "wirkung": sorted(wirkung, key=lambda a: (-(GEB[a]["bei_uns"] or 0), not GEB[a]["baubar"],
                                                       bool((gs.get(a) or {}).get("fortschritt")), GEB[a]["name"]))}

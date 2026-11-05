@@ -16,6 +16,7 @@ import re
 import time
 
 from . import gamedata, pfade, version
+from .sprache import ue
 
 GAME = gamedata.GAME_DIR                                            # …/Europa Universalis V/game
 STEAMAPPS = os.path.dirname(os.path.dirname(os.path.dirname(GAME)))  # …/steamapps
@@ -149,6 +150,15 @@ def ueberdeckung_aktuell(rel, basis=None, mod=MOD):
     return _ohne_marke(lies(os.path.join(mod, rel))) == lies(spiel)
 
 
+def spielstand_binaer():
+    """Steht der neueste Spielstand nicht im Textformat? Dann fehlt die Startoption -force_text_save, und das Programm kann ihn nicht lesen."""
+    from . import history                                   # hier: history bindet spielversion ein
+    try:
+        return not history.is_text_save(max((os.path.join(SAVES, n) for n in os.listdir(SAVES) if n.endswith(".eu5")), key=os.path.getmtime))
+    except (OSError, ValueError):                           # kein Ordner oder noch kein Spielstand
+        return False
+
+
 def _tun(entwickler, spieler):
     """Was zu tun ist: Spieler haben die Werkzeuge in tools/ nicht."""
     return spieler if pfade.eingefroren() else entwickler
@@ -160,24 +170,27 @@ def pruefen(mod=None):
     mod = mod or pfade.mod_ordner()
     st, lv, mi = steam(), log_version(), mod_info(mod)
     out = {"warnungen": [], "steam": st, "spiel": lv, "mod": {k: v for k, v in mi.items() if k != "basis"}}
+    if spielstand_binaer():
+        out["warnungen"].append({"stufe": "hoch", "text": ue("Der neueste Spielstand ist nicht im Textformat, der Ratgeber kann ihn nicht lesen."),
+                                 "tun": ue("In Steam die Startoption -force_text_save eintragen, das Spiel neu starten und neu speichern.")})
     if not mi:
         if pfade.eingefroren():
-            out["warnungen"].append({"stufe": "hoch", "text": "Der Mod EU5 Ratgeber wurde nicht gefunden.",
-                                     "tun": "Mod im Workshop abonnieren und im Playset einschalten."})
+            out["warnungen"].append({"stufe": "hoch", "text": ue("Der Mod EU5 Ratgeber wurde nicht gefunden."),
+                                     "tun": ue("Mod im Workshop abonnieren und im Playset einschalten.")})
         return out
     basis = mi.get("basis") or {}
     # rg_basis.json schreibt der Bau; die Nummer in metadata.json kann das Upload-Fenster des Spiels ändern
     gebaut = basis.get("mod_version") or mi.get("version")
     if gebaut != version.MOD_VERSION:
         out["warnungen"].append({
-            "stufe": "hoch", "text": f"Mod {gebaut} und Programm passen nicht zusammen, das Programm erwartet Mod {version.MOD_VERSION}.",
-            "tun": _tun("python tools/build_mod.py --install", "Neueste Fassung von Mod und Programm holen.")})
+            "stufe": "hoch", "text": ue(t"Mod {gebaut} und Programm passen nicht zusammen, das Programm erwartet Mod {version.MOD_VERSION}."),
+            "tun": _tun("python tools/build_mod.py --install", ue("Neueste Fassung von Mod und Programm holen."))})
     if pfade.eingefroren() and not pfade.mod_aktiv(mod):
-        out["warnungen"].append({"stufe": "hoch", "text": "Der Mod EU5 Ratgeber ist im aktiven Playset nicht eingeschaltet.",
-                                 "tun": "Im Spiel unter Mods & DLC einschalten."})
-    tun = _tun("Vor dem nächsten Spielstart: python tools/patch_pruefung.py – bis der Mod neu gebaut ist, Mod im Launcher abschalten.",
-               "Mod im Playset abschalten, bis im Workshop ein Update erscheint.")
-    tun_klein = _tun("python tools/patch_pruefung.py", "Der Mod kann weiterlaufen. Ist etwas nötig, erscheint ein Update im Workshop.")
+        out["warnungen"].append({"stufe": "hoch", "text": ue("Der Mod EU5 Ratgeber ist im aktiven Playset nicht eingeschaltet."),
+                                 "tun": ue("Im Spiel unter Mods & DLC einschalten.")})
+    tun = _tun(ue("Vor dem nächsten Spielstart: python tools/patch_pruefung.py – bis der Mod neu gebaut ist, Mod im Launcher abschalten."),
+               ue("Mod im Playset abschalten, bis im Workshop ein Update erscheint."))
+    tun_klein = _tun("python tools/patch_pruefung.py", ue("Der Mod kann weiterlaufen. Ist etwas nötig, erscheint ein Update im Workshop."))
     geaendert = []
     for rel in ueberdeckt(mod):
         try:
@@ -187,25 +200,25 @@ def pruefen(mod=None):
             continue
     alt_build, neu_build = basis.get("steam_build"), st.get("build")
     build_neu = bool(alt_build and neu_build and alt_build != neu_build)
-    seit = f" (Steam-Build {alt_build} → {neu_build}, {st.get('datum')})" if build_neu else ""
+    seit = ue(t" (Steam-Build {alt_build} → {neu_build}, {st.get('datum')})") if build_neu else ""
     if geaendert:
         out["warnungen"].append({
             "stufe": "hoch",
-            "text": f"Spiel-Update{seit}: {', '.join(geaendert)} hat sich geändert – der Daten-Mod {mi.get('version')} "
-                    f"überdeckt die neue Fassung noch mit der alten.",
+            "text": ue(t"Spiel-Update{seit}: {', '.join(geaendert)} hat sich geändert – der Daten-Mod {mi.get('version')} "
+                    t"überdeckt die neue Fassung noch mit der alten."),
             "tun": tun})
     elif build_neu:
         out["warnungen"].append({
             "stufe": "mittel",
-            "text": f"Spiel-Update{seit} – die vom Mod überdeckte Datei ist gleich geblieben, die Namen im Mod sind aber "
-                    f"noch nicht gegen die neue Version geprüft.",
+            "text": ue(t"Spiel-Update{seit} – die vom Mod überdeckte Datei ist gleich geblieben, die Namen im Mod sind aber "
+                    t"noch nicht gegen die neue Version geprüft."),
             "tun": tun_klein})
     if st.get("update_offen"):
-        out["warnungen"].append({"stufe": "mittel", "text": "Steam meldet ein ausstehendes Spiel-Update.",
-                                 "tun": _tun("Nach dem Update: python tools/patch_pruefung.py", "Update in Steam abwarten.")})
+        out["warnungen"].append({"stufe": "mittel", "text": ue("Steam meldet ein ausstehendes Spiel-Update."),
+                                 "tun": _tun(ue("Nach dem Update: python tools/patch_pruefung.py"), ue("Update in Steam abwarten."))})
     if not out["warnungen"] and lv.get("version") and mi.get("spiel") and lv["version"] != mi["spiel"]:
         out["warnungen"].append({
             "stufe": "mittel",
-            "text": f"Spielversion {lv['version']} (letzter Start {lv.get('datum')}), Daten-Mod gebaut für {mi['spiel']}.",
+            "text": ue(t"Spielversion {lv['version']} (letzter Start {lv.get('datum')}), Daten-Mod gebaut für {mi['spiel']}."),
             "tun": tun_klein})
     return out

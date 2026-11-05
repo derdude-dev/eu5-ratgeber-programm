@@ -16,6 +16,7 @@ rot bei Waffenstillstand, ohne jeden möglichen Kriegsgrund oder unter 1,0; grau
 import json
 
 from . import sprache
+from .sprache import ue
 
 GRUEN, GELB = 1.5, 1.0
 # Beziehungen, deren Länder die Kachel ohne Auswahl zeigt
@@ -59,42 +60,42 @@ def bewertung(r, wir, veraltet=None):
         gruende.append(veraltet)
     elif "krieg" in r["beziehungen"]:
         stufe = "rot"
-        gruende.append("wir sind bereits im Krieg mit ihnen (Kriegskachel)")
+        gruende.append(ue("wir sind bereits im Krieg mit ihnen (Kriegskachel)"))
     elif "kriegsverbuendet" in r["beziehungen"]:
         stufe = "rot"
-        gruende.append("Verbündeter in einem unserer Kriege")
+        gruende.append(ue("Verbündeter in einem unserer Kriege"))
     elif verh is None:
         stufe = "grau"
-        gruende.append("Bündnisstärke unbekannt – keine Mod-Werte (nur Spielstand)")
+        gruende.append(ue("Bündnisstärke unbekannt – keine Mod-Werte (nur Spielstand)"))
     elif d.get("truce") == 1:
         stufe = "rot"
-        gruende.append("Waffenstillstand mit uns")
+        gruende.append(ue("Waffenstillstand mit uns"))
     elif not kb and d.get("ohne_kb") == 0:
         stufe = "rot"
-        gruende.append("kein Kriegsgrund, und ein Krieg ohne Kriegsgrund ist laut Spiel nicht möglich")
+        gruende.append(ue("kein Kriegsgrund, und ein Krieg ohne Kriegsgrund ist laut Spiel nicht möglich"))
     elif verh < GELB:
         stufe = "rot"
-        gruende.append(f"ihr Verteidigungsbündnis ist stärker: {_de(v)} gegen unser Offensivbündnis {_de(o)}")
+        gruende.append(ue(t"ihr Verteidigungsbündnis ist stärker: {_de(v)} gegen unser Offensivbündnis {_de(o)}"))
     else:
         stufe = "gruen" if kb and verh >= GRUEN and d.get("truce") == 0 else "gelb"
-        gruende.append(f"unser Offensivbündnis {_de(o)} gegen ihr Verteidigungsbündnis {_de(v)} = {_de(verh, 1)} : 1"
-                       if verh != float("inf") else f"unser Offensivbündnis {_de(o)}, ihres 0")
+        gruende.append(ue(t"unser Offensivbündnis {_de(o)} gegen ihr Verteidigungsbündnis {_de(v)} = {_de(verh, 1)} : 1")
+                       if verh != float("inf") else ue(t"unser Offensivbündnis {_de(o)}, ihres 0"))
         if not kb:
-            gruende.append("kein Kriegsgrund – nur Krieg ohne Kriegsgrund" + (" (laut Spiel möglich)" if d.get("ohne_kb") == 1
-                                                                              else " (ob möglich: ab Mod 0.20)"))
+            gruende.append(ue("kein Kriegsgrund – nur Krieg ohne Kriegsgrund") + (ue(" (laut Spiel möglich)") if d.get("ohne_kb") == 1
+                                                                              else ue(" (ob möglich: ab Mod 0.20)")))
         elif verh < GRUEN:
-            gruende.append(f"Überlegenheit unter {_de(GRUEN, 1)} : 1")
+            gruende.append(ue(t"Überlegenheit unter {_de(GRUEN, 1)} : 1"))
         if d.get("truce") is None:
-            gruende.append("Waffenstillstand unbekannt (ab Mod 0.20) – deshalb höchstens gelb")
+            gruende.append(ue("Waffenstillstand unbekannt (ab Mod 0.20) – deshalb höchstens gelb"))
     if kb and stufe != "grau":
-        gruende.insert(0, "Kriegsgrund vorhanden")
+        gruende.insert(0, ue("Kriegsgrund vorhanden"))
     w = r["werte"]
     if d.get("at_war") == 1 and "krieg" not in r["beziehungen"]:
-        hinweise.append("ist schon im Krieg – Kräfte gebunden")
+        hinweise.append(ue("ist schon im Krieg – Kräfte gebunden"))
     if _num(w.get("manpower")) and _num(w.get("max_manpower")) and w["max_manpower"] > 0 and w["manpower"] < 0.25 * w["max_manpower"]:
-        hinweise.append(f"Mannstärke knapp ({_de(w['manpower'])} von {_de(w['max_manpower'])} Tsd.)")
+        hinweise.append(ue(t"Mannstärke knapp ({_de(w['manpower'])} von {_de(w['max_manpower'])} Tsd.)"))
     if _num(w.get("stability")) and w["stability"] < 0:
-        hinweise.append(f"Stabilität {_de(w['stability'], 1)}")
+        hinweise.append(ue(t"Stabilität {_de(w['stability'], 1)}"))
     return {"stufe": stufe, "verhaeltnis": None if verh == float("inf") else verh, "unendlich": verh == float("inf"),
             "gruende": gruende, "hinweise": hinweise}
 
@@ -120,7 +121,7 @@ def build(db, last, names=None, kriege=None):
     sp = {x["tag"]: x for x in (last.get("laender_militaer") or [])}
     # Mod-Werte mehr als einen Monat älter als der Spielstand (ohne Daten-Mod weitergespielt): Ampel grau, keine Empfehlung
     sj, sm = (int(x) for x in str(last["meta"].get("datum")).split(".")[:2])
-    veraltet = (f"Mod-Werte ({(lm - 1) // 12}.{(lm - 1) % 12 + 1}) älter als der Spielstand ({last['meta'].get('datum')})"
+    veraltet = (ue(t"Mod-Werte ({(lm - 1) // 12}.{(lm - 1) % 12 + 1}) älter als der Spielstand ({last['meta'].get('datum')})")
                 if lm and sj * 12 + sm > lm + 1 else None)
     wir = {k: land.get(k) for k in WERTE if _num(land.get(k))}
     wir.update({"gold": mw.get("gold"), "saldo": land.get("monthly_balance"), "kriege": len(kriege or []),
