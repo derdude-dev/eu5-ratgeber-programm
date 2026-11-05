@@ -62,6 +62,7 @@ def main():
         shutil.rmtree(ordner)
     shutil.copytree(BAU / "dist" / NAME, ordner)
     shutil.copyfile(ROOT / "LICENSE", ordner / "LICENSE.txt")
+    shutil.copyfile(ROOT / "NOTICE.md", ordner / "NOTICE.txt")
     shutil.copyfile(ROOT / "release" / "LIESMICH.txt", ordner / "LIESMICH.txt")
     shutil.copyfile(ROOT / "release" / "Ratgeber beenden.bat", ordner / "Ratgeber beenden.bat")
     z = ZIEL / f"EU5-Ratgeber-{t}-windows.zip"

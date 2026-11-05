@@ -35,7 +35,7 @@ Exe bauen: PyInstaller in einem venv unter `../Exe_bau/venv` installieren, dann 
 
 ## Lizenz
 
-MIT, siehe [LICENSE](LICENSE). Das Programmsymbol stammt aus einem Foto unter CC BY 2.0, Angaben ebenfalls dort.
+MIT, siehe [LICENSE](LICENSE). Das Programmsymbol stammt aus einem Foto unter CC BY 2.0, Angaben in [NOTICE.md](NOTICE.md).
 
 Kein offizielles Produkt von Paradox Interactive. Europa Universalis V ist eine Marke von Paradox Interactive.
 

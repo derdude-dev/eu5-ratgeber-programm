@@ -53,4 +53,4 @@ ABSCHALTEN UND ENTFERNEN
 LIZENZ
 
 MIT, siehe LICENSE.txt. Das Foto im Mod und das Programmsymbol stehen unter CC BY 2.0,
-siehe LICENSE.txt.
+siehe NOTICE.txt.
