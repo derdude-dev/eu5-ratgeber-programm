@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EU5 Ratgeber</title>
+<style>
+:root {
+  --bg: #f6f4ef; --card: #ffffff; --ink: #1f2328; --muted: #6b6f76; --line: #e3e0d8; --soft: #f1eee6;
+  --pos: #1a7f37; --neg: #c2362b; --accent: #8a5a1f;
+  --c1: #8a5a1f; --c2: #2f6db5; --c3: #1a7f37; --c4: #a33ea1; --c5: #c2362b; --c6: #3f8f8f; --c7: #b8860b; --c8: #555;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #16181b; --card: #1f2226; --ink: #e8e6e1; --muted: #9aa0a6; --line: #33373c; --soft: #262a2f;
+          --pos: #4cc26a; --neg: #ff6b5e; --accent: #d9a45c;
+          --c1: #d9a45c; --c2: #6aa4ec; --c3: #4cc26a; --c4: #d77fd5; --c5: #ff6b5e; --c6: #6cc6c6; --c7: #e3b341; --c8: #aaa; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--line); background: var(--card); position: sticky; top: 0; z-index: 3; }
+header h1 { font-size: 18px; margin: 0 12px 0 0; }
+header .meta { color: var(--muted); }
+/* Ansichten (30.10., ansichten.js): Umschalter Ratgeber · Mechaniken · Fortschritte; in einer Ansicht ohne Seitenleiste */
+.ansichten { display: flex; gap: 4px; }
+.ansichten a { color: var(--ink); text-decoration: none; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; }
+.ansichten a:hover { color: var(--accent); }
+.ansichten a.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+body.in_ansicht { padding-left: 0; }
+/* Kopfwerte gehören zum Ratgeber – in einer Ansicht weg, sonst verdeckt die feste Kopfzeile auf kleinen Bildschirmen fast alles */
+body.in_ansicht #kopf { display: none; }
+/* Navigation: feste Seitenleiste links, immer sichtbar (auf schmalen Bildschirmen oben als Zeile) */
+body { padding-left: 190px; }
+nav.toc { position: fixed; left: 0; top: 0; bottom: 0; width: 190px; overflow-y: auto; z-index: 4; background: var(--card);
+          border-right: 1px solid var(--line); padding: 14px 10px 20px; display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
+nav.toc .tg { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 3px 6px; }
+nav.toc .tg:first-child { margin-top: 0; }
+/* Einträge nie zusammendrücken: bei vielen Orten (Walachei, 27.10.) schrumpfte die Flex-Spalte sonst jeden Link auf wenige
+   Pixel, statt die Leiste scrollen zu lassen */
+nav.toc > * { flex-shrink: 0; }
+nav.toc a { color: var(--ink); text-decoration: none; padding: 4px 6px; border-radius: 6px; border-left: 3px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+nav.toc a:hover { background: var(--soft); color: var(--accent); }
+nav.toc a.auf { border-left-color: var(--th, var(--accent)); background: var(--soft); font-weight: 600; }
+@media (max-width: 900px) {
+  body { padding-left: 0; }
+  nav.toc { position: static; width: auto; flex-direction: row; flex-wrap: wrap; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px 16px; }
+  nav.toc .tg { margin: 0 4px 0 8px; }
+}
+select, input, button { font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; }
+button { cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* Kacheln: zugeklappt im Raster, aufgeklappt über die ganze Breite */
+/* volle Bildschirmbreite, Kacheln mindestens 520 px (Seite nur am PC, Nutzerwunsch 30.09.; vorher 1400 px / 420 px) */
+main { padding: 16px 20px 60px; display: grid; gap: 14px; }
+/* je Gruppe ein eigenes Raster: "dense" füllt Lücken nur innerhalb der Gruppe (vorher rutschten Kacheln über die Überschrift) */
+.gridT { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); align-items: start; grid-auto-flow: row dense; }
+main > .empty { grid-column: 1 / -1; }
+details.sec[open] { grid-column: 1 / -1; }
+/* aufgeklappt höchstens 3 Kacheln breit (Nutzerwunsch 30.09.: bei 4 Spalten wirkte der Inhalt zu breit); ab 3 Spalten
+   (3 × 520 + 2 × 14 = 1588 px) über 3 Spalten, daneben rücken zugeklappte Kacheln nach (grid-auto-flow dense) */
+.gridT { container-type: inline-size; }
+@container (min-width: 1588px) { details.sec[open] { grid-column: span 3; } }
+/* geöffnete Kachel steht an Position 1 ihres Bereichs (Nutzerwunsch 30.09.); mehrere geöffnete in ihrer gewohnten Reihenfolge */
+details.sec[open] { order: -1; }
+details.sec:not([open]) { min-height: var(--tileh, 0px); }   /* geschlossen alle gleich hoch (design.js equalizeTiles) */
+details.sec > summary .st { display: flex; gap: 10px; align-items: baseline; }
+details.sec > summary::before { content: none !important; }
+details.sec > summary .st::before { content: "▸"; color: var(--muted); transition: transform .15s; display: inline-block; }
+details.sec[open] > summary .st::before { transform: rotate(90deg); }
+details.sec > summary:hover .st { color: var(--accent); }
+details.sec > summary .head { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-top: 8px; font-weight: 400; }
+details.sec > summary { flex-direction: column; align-items: stretch !important; }
+.mk { display: inline-flex; flex-direction: column; min-width: 0; }
+.mk small { color: var(--muted); font-size: 11px; }
+.mk b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mk b i { font-style: normal; font-size: 11px; font-weight: 400; margin-left: 4px; }
+.mk.big b { font-size: 24px; }
+.compo { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(60px, 2fr) auto 44px; gap: 4px 10px; align-items: center; font-size: 13px; }
+.compo .subl { padding-left: 16px; color: var(--muted); font-size: 12px; }
+.compo .st { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.compo .v { text-align: right; font-variant-numeric: tabular-nums; } .compo .hint0 { color: var(--muted); font-size: 11px; }
+.bar1 { height: 8px; background: var(--soft); border-radius: 4px; overflow: hidden; } .bar1 > i { display: block; height: 100%; border-radius: 4px; }
+pre.raw { white-space: pre-wrap; font-size: 11px; margin: 0; max-height: 320px; overflow: auto; }
+/* Datenbrowser */
+#browser { padding-top: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.dbar input[type=search] { flex: 1 1 240px; }
+.tree details { margin-left: 14px; } .tree summary { cursor: pointer; }
+.tree .k { color: var(--accent); } .tree .t { color: var(--muted); font-size: 11px; }
+.tree .leaf { margin-left: 14px; font-variant-numeric: tabular-nums; }
+.dlist > details { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.dlist > details > summary { cursor: pointer; }
+.qu { font-size: 11px; color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h3 { font-size: 14px; margin: 0 0 8px; }
+.hint { color: var(--muted); font-size: 12px; margin: 6px 0 0; }
+details.sec { background: var(--card); border: 1px solid var(--line); border-radius: 10px; scroll-margin-top: calc(var(--hh, 120px) + 12px); }
+details.sec > summary { cursor: pointer; padding: 12px 16px; font-weight: 600; font-size: 15px; list-style: none; display: flex; gap: 10px; align-items: baseline; }
+details.sec > summary::before { content: "▸"; color: var(--muted); transition: transform .15s; }
+details.sec[open] > summary::before { transform: rotate(90deg); }
+details.sec > summary .sub { color: var(--muted); font-weight: 400; font-size: 12px; }
+details.sec > .body { padding: 0 16px 16px; display: grid; gap: 14px; }
+details.sec .card { background: var(--soft); border-color: transparent; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi .label { color: var(--muted); font-size: 12px; }
+.kpi .value { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi .delta { font-size: 12px; font-variant-numeric: tabular-nums; }
+.fin { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 12px; }
+.fin-lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-top: 10px; }
+details.more > summary { cursor: pointer; color: var(--accent); font-size: 12px; margin-top: 8px; }
+.pos { color: var(--pos); } .neg { color: var(--neg); }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 14px; }
+.grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+/* Marktkachel: Torte Handelsvorteil links, Orte mit Marktzugriff rechts (bricht bei wenig Platz um) */
+.mvz { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.mvz > div:first-child { flex: 0 0 auto; }
+.mvz > div + div { flex: 1 1 380px; min-width: 0; }
+svg.chart { width: 100%; height: 230px; display: block; }
+svg.chart text, svg.pie text { fill: var(--muted); font-size: 11px; }
+svg.chart .grid { stroke: var(--line); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+td.l, th.l { text-align: left; white-space: normal; }
+th { color: var(--muted); font-weight: 600; font-size: 12px; }
+.scroll { overflow-x: auto; max-height: 440px; overflow-y: auto; }
+.marks form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.marks input[name=text] { flex: 1 1 260px; }
+.empty { color: var(--muted); padding: 24px; text-align: center; }
+.tag { display: inline-block; padding: 1px 6px; border-radius: 4px; background: var(--line); font-size: 11px; margin: 1px 2px; }
+.bar { position: relative; height: 10px; background: var(--line); border-radius: 5px; }
+.bar > i { position: absolute; top: 0; bottom: 0; background: var(--accent); border-radius: 5px; }
+.bar > b { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 1px; background: var(--muted); }
+.sv { display: grid; grid-template-columns: 1fr 180px 1fr 50px; gap: 6px 10px; align-items: center; font-size: 12px; }
+.sv .r { text-align: right; } .sv .v { text-align: right; font-variant-numeric: tabular-nums; }
+.sv.sv5 { grid-template-columns: 1fr 180px 1fr 50px minmax(150px, auto); }   /* + Verschiebung je Monat (30.09.) */
+/* Kopfzeile: grundlegende Werte, immer sichtbar */
+.kopf { width: 100%; display: flex; flex-wrap: wrap; gap: 6px 0; align-items: stretch; border-top: 1px solid var(--line); padding-top: 8px; }
+.kopf:empty { display: none; }
+.kopf .kz { display: flex; flex-direction: column; justify-content: flex-start; align-items: center; text-align: center; padding: 0 14px; border-left: 1px solid var(--line); min-width: 0; }
+.kopf .kz:first-child { border-left: 0; padding-left: 0; }
+.kopf .kz small { color: var(--accent); font-size: 12px; font-weight: 600; letter-spacing: .02em; white-space: nowrap; margin-bottom: 2px; }
+.kopf .kz b { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kopf .kz b i { font-style: normal; font-size: 11px; font-weight: 500; margin-left: 4px; }
+.kopf .kz b .u { color: var(--muted); font-weight: 400; font-size: 12px; }
+.kopf .kz.land b { font-size: 17px; }
+.kopf .kbar { width: 100%; min-width: 56px; max-width: none; position: relative; margin-top: 4px; }
+.kbar i.neg { background: var(--neg); }
+.kbar.mitte i { position: absolute; top: 0; border-radius: 0; }
+.kbar.mitte::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--muted); }
+.stbar { display: flex; width: 280px; height: 18px; border-radius: 4px; overflow: hidden; margin-top: 3px; }
+.stbar i { display: block; height: 100%; font-style: normal; font-size: 11px; font-weight: 700; line-height: 18px; color: #111; text-align: center; overflow: hidden; white-space: nowrap; }
+.stnamen { width: 280px; text-align: center; font-size: 11px; font-weight: 600; line-height: 1.3; margin-top: 2px; }
+.stnamen span { white-space: nowrap; } .stnamen i { font-style: normal; color: var(--muted); margin: 0 4px; }
+/* Gestaltung (design.js): Themen, Gruppen, einheitlicher Kopf, Abschnitte, Aufschlüsselungen */
+details.sec { border-left: 4px solid var(--th, var(--line)); }
+details.sec > summary .st .ic { font-size: 17px; line-height: 1; }
+h2.grp { margin: 14px 0 -4px; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+h2.grp:first-child { margin-top: 0; }
+.hd { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+/* Überschriften aller Kopfwerte einer Reihe oben auf gleicher Höhe (Nutzerwunsch 29.09.) */
+.hd-big, .hd-small { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: flex-start; }
+.hd-small:empty { display: none; }
+.hd-grid { display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px 16px; align-items: start; }
+.hd-grid .hk b, .hd-grid .hk small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mbar { display: block; height: 4px; background: var(--line); border-radius: 2px; margin-top: 3px; overflow: hidden; max-width: 140px; }
+.mbar i { display: block; height: 100%; background: var(--th, var(--accent)); border-radius: 2px; }
+.hk { display: inline-flex; flex-direction: column; min-width: 0; }
+.hkstack { display: inline-flex; flex-direction: column; gap: 6px; min-width: 0; }
+.hd-big > .neben { order: 1; }                              /* zugeklappt am Ende der Reihe (rutscht in die zweite Zeile) */
+details.sec[open] .hd-big > .neben { order: 0; }            /* aufgeklappt direkt neben der vorigen Spalte */
+.hk small { color: var(--muted); font-size: 11px; font-weight: 400; }
+.hk b { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hk.big b { font-size: 26px; line-height: 1.15; }
+.hk b.wort, .hk.big b.wort { font-size: 17px; line-height: 1.7; }   /* Namen statt Zahlen im Kopf (z. B. bester Gebäudetyp) */
+.hdbr { flex-basis: 100%; height: 0; }                   /* erzwungener Zeilenumbruch im Kopf */
+/* Aufgeklappte Kachel: alle Kopfwerte (große und kleine Reihe) in einer Reihe, ohne erzwungene Umbrüche; Warnungen darunter.
+   Güterkachel ausgenommen (eigene Anordnung). Nutzerwunsch 29.09. */
+details.sec[open]:not(#gueter) .hd { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 6px 16px; }
+details.sec[open]:not(#gueter) .hd-big, details.sec[open]:not(#gueter) .hd-small { display: contents; }
+details.sec[open]:not(#gueter) .hdbr { display: none; }
+details.sec[open]:not(#gueter) .hd-warn { flex-basis: 100%; }
+.hk b i { font-style: normal; font-size: 11px; font-weight: 400; margin-left: 5px; }
+.hk b i.tr { font-size: 12px; }
+.hk .spark { margin-top: 2px; }
+.hk .hku, .kopf .kz .hku { color: var(--muted); font-size: 11px; font-weight: 400; white-space: nowrap; }
+.hd-warn { display: flex; flex-wrap: wrap; gap: 6px; }
+.warn { font-size: 12px; font-weight: 500; color: var(--neg); background: color-mix(in srgb, var(--neg) 12%, transparent); padding: 2px 8px; border-radius: 10px; }
+section.ab > h4 { margin: 4px 0 8px; font-size: 13px; color: var(--th, var(--accent)); text-transform: uppercase; letter-spacing: .04em; }
+section.ab { display: grid; gap: 12px; }
+.code { color: var(--muted); font-size: 10px; font-family: ui-monospace, Consolas, monospace; opacity: .8; }
+.brk { font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.brk .bk { display: block; }
+.brk .bk > summary, .brk div.bk { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 2px 0; border-bottom: 1px dotted var(--line); }
+.brk .bk > summary { cursor: pointer; list-style: none; }
+.brk .bk > summary::-webkit-details-marker { display: none; }
+.brk .bk > summary .bl::before { content: "▸ "; color: var(--muted); }
+.brk details.bk[open] > summary .bl::before { content: "▾ "; }
+.brk .bsub { padding-left: 16px; border-left: 2px solid var(--line); margin: 2px 0 4px 4px; }
+.brk .bv { text-align: right; white-space: nowrap; } .brk .bt { color: var(--muted); }
+.pies { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.kv span:nth-child(odd) { color: var(--muted); } .kv span:nth-child(even) { text-align: right; font-variant-numeric: tabular-nums; }
+/* Orte im Vergleich: Summenzeile je Provinz und gesamt */
+tr.grp td { border-top: 2px solid var(--line); font-weight: 600; }
+tr.ges td { border-top: 2px solid var(--line); font-weight: 700; }
+/* Stände: eine Karte je Stand nebeneinander (Krone, Adel, Klerus, Bürger, Gemeine) */
+details.sec:not([open]) .hdpie { display: none; }
+.hdpie { flex: 0 0 auto; }
+.stgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; margin-bottom: 14px; }
+/* Verlauf: Zeitraum-Schalter */
+.zr { display: flex; gap: 6px; align-items: center; margin: 0 0 12px; }
+.zr .hint { margin: 0 4px 0 0; }
+.zr button.an { background: var(--accent); color: #fff; border-color: var(--accent); }
+/* schmale Karten: Spaltenköpfe dürfen umbrechen */
+.thw th { white-space: normal; vertical-align: bottom; }
+/* Verweis auf eine Kachel (Ortsname in der Orte-Kachel) */
+a[data-oeffne] { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--muted); }
+a[data-oeffne]:hover { color: var(--accent); border-bottom-color: var(--accent); }
+.card h5 { margin: 10px 0 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+/* Empfehlungen: eine Karte je Empfehlung, linker Rand nach Wichtigkeit */
+.empf { border-left: 4px solid var(--line); }
+.empf.hoch { border-left-color: var(--neg); } .empf.mittel { border-left-color: var(--c7); }
+.empf h3 { margin: 0 0 6px; font-size: 14px; line-height: 1.35; }
+.empf p { margin: 2px 0 6px; } .empf ul { margin: 2px 0 6px; padding-left: 18px; } .empf li { margin: 2px 0; }
+.empf .tag.hoch { background: color-mix(in srgb, var(--neg) 18%, transparent); color: var(--neg); }
+.empf .tag.mittel { background: color-mix(in srgb, var(--c7) 22%, transparent); }
+.empf-fuss { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 13px; }
+/* Fremde Märkte in Reichweite: Auswahl unter der Gruppenüberschrift */
+.fmwahl { margin: 10px 0 0; }
+.fmwahl > summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+.fmliste { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 2px 14px; margin: 8px 0; font-size: 13px; }
+.fmliste label { display: flex; gap: 6px; align-items: baseline; cursor: pointer; }
+.fmliste i { color: var(--muted); font-style: normal; font-size: 11px; }
+/* Wirtschaftsplan (25.10.): Auswahl des Schwerpunkts */
+.wpwahl { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin: 0 0 10px; }
+.wpwahl select { font-weight: 600; }
+.wpkette > summary { font-size: 14px; }
+/* Spiel-Update erkannt (24.10.): ganze Breite unter der Kopfzeile, bleibt beim Scrollen sichtbar */
+.pruefung { flex-basis: 100%; display: grid; gap: 4px; }
+.pruefung div { padding: 8px 12px; border-radius: 8px; border-left: 4px solid var(--neg); color: var(--ink);
+                background: color-mix(in srgb, var(--neg) 12%, transparent); }
+.pruefung div.mittel { border-left-color: var(--c7); background: color-mix(in srgb, var(--c7) 12%, transparent); }
+.pruefung code { font-size: 12px; }
+/* Ländergründung (30.10., gruendung.js): Bedingungen als Baum, Empfehlungen je Bereich, Verweise ins Wiki und in den Techbaum */
+.grbreit { grid-column: 1 / -1; }
+.grauswahl { display: inline-flex; gap: 6px; align-items: baseline; margin: 0 12px 8px 0; }
+.grauswahl select { font-weight: 600; }
+ul.grbaum { list-style: none; margin: 2px 0; padding-left: 0; }
+ul.grbaum ul.grbaum { padding-left: 20px; border-left: 1px dashed var(--line); margin-left: 5px; }
+ul.grbaum li { margin: 3px 0; }
+ul.grempf { margin: 4px 0; padding-left: 18px; }
+ul.grempf li { margin: 4px 0; }
+.grbereiche > div { min-width: 0; }
+.grbereiche h5 { margin-top: 2px; }
+.grbereiche h5 .hint { text-transform: none; letter-spacing: 0; font-weight: 400; margin-left: 6px; }
+a.grlink { color: var(--accent); text-decoration: none; margin-left: 2px; }
+a.grlink:hover { text-decoration: underline; }
+/* Startstrategie (31.10., startstrategie.js): Karten über die ganze Breite, Tabellen „jetzt | Vorschlag | Warum | Bezug“ */
+.ssbreit { grid-column: 1 / -1; }
+.ssscroll { overflow-x: auto; }                         /* ohne Höhenbegrenzung (anders als .scroll) */
+table.sstab { font-size: 12.5px; }
+table.sstab td { vertical-align: top; }
+table.sstab td:nth-child(n+3) { min-width: 170px; }
+details#startstrategie a:not(.grlink) { color: var(--accent); }
+ul.ssliste { margin: 4px 0; padding-left: 16px; }
+ul.ssliste li { margin: 2px 0; }
+ol.sserste { margin: 4px 0; padding-left: 22px; }
+ol.sserste li { margin: 6px 0; }
+details.ssbed { margin-top: 4px; }
+details.ssbed > summary { cursor: pointer; font-size: 12px; color: var(--muted); }
+/* Mechaniken (Wiki, 30.10., wiki.js): links Filter und Trefferliste (je eigene Bildlaufleiste), rechts der Eintrag;
+   bis 1200 px Filter über der Liste, bis 760 px (Handy) alles untereinander. --wk_top = Höhe der Kopfzeile (wiki.js misst sie) */
+.wk { display: grid; grid-template-columns: 540px minmax(0, 1fr); gap: 14px; align-items: start; }
+.wk_links { position: sticky; top: calc(var(--wk_top, 60px) + 12px); height: calc(100vh - var(--wk_top, 60px) - 28px); display: grid;
+            grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+.wk_filter, .wk_liste { overflow-y: auto; min-height: 0; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+.wk_liste { position: relative; padding: 6px; }
+.wk_filter input[type=search], .wk_filter select { width: 100%; }
+.wk_zahl { color: var(--muted); font-size: 12px; margin: 6px 2px 0; }
+.wk_t { color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; margin: 12px 0 4px 2px; }
+.wk_chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.wk_chips a { font-size: 12px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--ink); text-decoration: none; }
+.wk_arten { display: flex; flex-direction: column; gap: 1px; }
+.wk_arten a { display: flex; justify-content: space-between; gap: 8px; padding: 3px 6px; border-radius: 6px; color: var(--ink); text-decoration: none;
+              font-size: 13px; border: 1px solid transparent; }
+.wk_arten a b { font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wk_arten a.leer { opacity: .5; }
+.wk_arten a:hover, .wk_chips a:hover { color: var(--accent); }
+.wk_chips a.on, .wk_arten a.on, .wk_arten a.on b { background: var(--accent); color: #fff; border-color: var(--accent); }
+.wk_li { display: block; padding: 4px 8px; border-radius: 6px; color: var(--ink); text-decoration: none; border-left: 3px solid transparent; }
+.wk_li:hover { background: var(--soft); }
+.wk_li.on { background: var(--soft); border-left-color: var(--accent); font-weight: 600; }
+.wk_li small { display: block; color: var(--muted); font-size: 11px; font-weight: 400; }
+.wk_liste > .wk_t:first-child { margin-top: 2px; }
+.wk mark { background: color-mix(in srgb, var(--c7) 40%, transparent); color: inherit; border-radius: 2px; }
+.wk_eintrag { min-width: 0; scroll-margin-top: calc(var(--wk_top, 60px) + 8px); }
+.wk_eintrag h2 { margin: 0; font-size: 20px; }
+.wk_kopf { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; margin-bottom: 4px; }
+.wk_eintrag a.tag { color: var(--ink); }
+.wk_ab { margin-top: 18px; }
+.wk_ab h3 { font-size: 14px; margin: 0 0 6px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+.wk_ab h3 .qu { font-weight: 400; margin-left: 6px; }
+.wk_text { line-height: 1.55; max-width: 900px; }
+.wk_eintrag a, .wk_liste .hint a { color: var(--accent); text-decoration: none; }
+.wk_eintrag a:hover { text-decoration: underline; }
+.wk_off { color: var(--muted); font-style: italic; cursor: help; }
+.wk_tab { width: auto; min-width: min(100%, 420px); margin: 6px 0; }
+.wk_tab td { white-space: normal; }
+.wk_vw { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.wk_vw a { padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.wk_ul { margin: 0; padding-left: 18px; } .wk_ul li { margin: 3px 0; }
+.wk_pol { padding: 8px 10px; border-left: 3px solid var(--line); margin: 8px 0; scroll-margin-top: calc(var(--wk_top, 60px) + 12px); }
+.wk_pol.on { border-left-color: var(--accent); background: var(--soft); }
+.wk_mod { border-bottom: 1px solid var(--line); padding: 4px 0; } .wk_mod > summary { cursor: pointer; }
+.wk_mod > .wk_text, .wk_her { margin: 4px 0 4px 16px; font-size: 13px; }
+.wk_rg > summary { cursor: pointer; font-weight: 600; margin: 4px 0; }
+.wk_md { font-size: 12px; white-space: pre-wrap; } .wk_md.ein { padding-left: 14px; }
+.wk_zeit { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.wk_artgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.wk_artgrid a.card { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; color: var(--ink); }
+.wk_artgrid a.card:hover { border-color: var(--accent); text-decoration: none; }
+@media (max-width: 1200px) {
+  .wk { grid-template-columns: 320px minmax(0, 1fr); }
+  .wk_links { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .wk_filter { max-height: 46vh; }
+  .wk_arten { flex-direction: row; flex-wrap: wrap; } .wk_arten a { border-color: var(--line); font-size: 12px; }
+}
+@media (max-width: 760px) {
+  .wk { grid-template-columns: minmax(0, 1fr); }
+  .wk_links { position: static; height: auto; }
+  .wk_filter { max-height: none; }
+  .wk_liste { max-height: 50vh; }
+}
+/* Fortschritte (Techbaum, 30.10., techbaum.js): Vorschlag oben, Suchleiste, je Zeitalter Themen mit Stufen, rechts das Detail
+   (unter 1100 px darüber); Status als Farbe der Marken: erforscht grün, jetzt blau, Vorgänger fehlen gold, später grau,
+   nicht für uns gestrichelt, unklar gepunktet violett */
+.tb-leiste { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.tb-leiste input[type=search] { flex: 1 1 300px; min-width: 0; }
+.tb-legende { display: flex; flex-wrap: wrap; gap: 2px; }
+.tb-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 460px); gap: 14px; align-items: start; }
+.tb-liste { display: grid; gap: 10px; min-width: 0; }
+.tb-detail { position: sticky; top: calc(var(--hh, 120px) + 10px); max-height: calc(100vh - var(--hh, 120px) - 24px); overflow-y: auto; min-width: 0; }
+.tb-detail h3 { font-size: 17px; margin: 6px 0 0; }
+.tb-detail table td { white-space: normal; }
+.tbc { display: inline-block; padding: 1px 8px; margin: 2px 2px; border-radius: 11px; font-size: 12.5px; line-height: 1.5; color: var(--ink);
+       text-decoration: none; border: 1px solid var(--tbf, var(--line)); background: color-mix(in srgb, var(--tbf, var(--line)) 14%, transparent); }
+a.tbc:hover { border-color: var(--accent); color: var(--accent); }
+.tbc.sel { outline: 2px solid var(--accent); outline-offset: 1px; font-weight: 600; }
+.tbc.st-e { --tbf: var(--pos); } .tbc.st-j { --tbf: var(--c2); font-weight: 600; } .tbc.st-v { --tbf: var(--c7); }
+.tbc.st-s { --tbf: var(--muted); } .tbc.st-n { --tbf: var(--line); color: var(--muted); border-style: dashed; }
+.tbc.st-u { --tbf: var(--c4); border-style: dotted; }
+.tb-alter > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 15px; }
+.tb-alter > summary .hint { margin: 0; }
+.tb-wiki { margin-left: auto; font-size: 12px; color: var(--accent); text-decoration: none; }
+.tb-thema { margin: 10px 0 4px; }
+.tb-thema h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.tb-thema h4 small { font-weight: 400; }
+.tb-stufe { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 6px; align-items: baseline; border-top: 1px dotted var(--line); padding: 2px 0; }
+.tb-sn { color: var(--muted); font-size: 11px; white-space: nowrap; }
+#ansicht_techbaum mark { background: color-mix(in srgb, var(--c7) 40%, transparent); color: inherit; border-radius: 2px; }
+.tb-trefferbox { max-height: none; }
+.tb-treffer td { vertical-align: top; white-space: normal; } .tb-fund { font-size: 12px; color: var(--muted); }
+.tb-bed ul, ul.tb-baum ul { list-style: none; margin: 2px 0; padding-left: 16px; border-left: 1px dashed var(--line); }
+.tb-bed > ul, ul.tb-baum { list-style: none; padding-left: 0; border-left: 0; margin: 2px 0; }
+.tb-bed li, .tb-baum li { margin: 2px 0; }
+.tb-bed .ok { color: var(--pos); } .tb-bed .no { color: var(--neg); } .tb-bed .q { color: var(--c4); font-weight: 700; }
+ol.tb-weg, ul.tb-frei, ul.tb-q, ul.tb-gr, ol.tb-gr { margin: 2px 0; padding-left: 18px; } ul.tb-gr li, ol.tb-gr li { margin: 2px 0; }
+.tb-det-kopf { display: flex; flex-wrap: wrap; gap: 4px; }
+.tb-vor table td { white-space: normal; vertical-align: top; }
+.tb-detail a:not(.tbc), .tb-vor a, .tb-q a { color: var(--accent); }
+@media (max-width: 1100px) {
+  .tb-grid { grid-template-columns: minmax(0, 1fr); }
+  .tb-detail { order: -1; position: static; max-height: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>EU5 Ratgeber</h1>
+  <nav class="ansichten" id="ansichten"><a href="#" data-ansicht="">Ratgeber</a></nav>
+  <label>Partie <select id="partie"></select></label>
+  <span class="meta" id="stand"></span>
+  <button id="reload" title="Neu laden">↻</button>
+  <div class="kopf" id="kopf"></div>
+  <div class="pruefung" id="pruefung" hidden></div>
+</header>
+<nav class="toc" id="toc"></nav>
+<main id="main"><div class="empty">Lade …</div></main>
+<main id="browser"></main>
+<script src="/design.js"></script>
+<script src="/live.js"></script>
+<script src="/ort.js"></script>
+<script src="/app.js"></script>
+<script src="/gruendung.js"></script>
+<script src="/startstrategie.js"></script>
+<script src="/browser.js"></script>
+<script src="/ansichten.js"></script>
+<script src="/wiki.js"></script>
+<script src="/techbaum.js"></script>
+</body>
+</html>

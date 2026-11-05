@@ -1,0 +1,56 @@
+EU5 Ratgeber
+
+Strategieberater für Europa Universalis V. Das Programm liest deine Partie und schreibt
+die Empfehlungen in die Seitenleiste „Ratgeber“ im Spiel. Es arbeitet nur auf deinem
+Rechner und schickt nichts ins Internet.
+
+EINRICHTEN
+
+1. Mod EU5 Ratgeber im Steam Workshop abonnieren und im Spiel unter „Mods & DLC“
+   im Playset einschalten.
+2. In Steam: Rechtsklick auf Europa Universalis V, Eigenschaften, Startoptionen:
+   -force_text_save
+   Ohne diese Option kann das Programm die Spielstände nicht lesen.
+3. Vor dem Entpacken: Rechtsklick auf die Zip-Datei, Eigenschaften, unten „Zulassen“
+   anhaken. Sonst fragt Windows bei jedem Start nach.
+4. Den Ordner an einen festen Ort legen, zum Beispiel unter Dokumente.
+   Das Programm läuft aus diesem Ordner.
+5. „EU5 Ratgeber.exe“ doppelt anklicken. Beim ersten Start fragt es, ob es künftig
+   mit dem Spiel starten soll, und baut sein Spielwissen auf. Das dauert etwa eine
+   halbe Minute.
+6. Spiel starten, einen Spielstand laden oder speichern. Danach in der Seitenleiste
+   „Aktualisieren“ drücken.
+
+WARNUNG VON WINDOWS
+
+Das Programm ist nicht signiert. Windows oder ein Virenscanner können deshalb warnen.
+Bei SmartScreen: „Weitere Informationen“, dann „Trotzdem ausführen“.
+Den Quellcode kannst du selbst lesen:
+https://github.com/derdude-dev/eu5-ratgeber-programm
+
+NEUE VERSION
+
+1. „Ratgeber beenden.bat“ doppelt anklicken.
+2. Neue Zip-Datei in denselben Ordner entpacken und alles überschreiben.
+
+Mod und Programm müssen zusammenpassen. Sonst zeigt die Seite eine Warnung.
+
+GUT ZU WISSEN
+
+- Nur für deutsche Spielsprache.
+- Nach einem Spiel-Update kann der Mod ein Update brauchen.
+- Der Ratgeber endet mit dem Browser-Tab, läuft das Spiel, mit dem Spiel.
+  Hängt er doch einmal: „Ratgeber beenden.bat“.
+- Daten und Protokolle liegen in %LOCALAPPDATA%\EU5 Ratgeber\data.
+
+ABSCHALTEN UND ENTFERNEN
+
+1. „Ratgeber beenden.bat“ doppelt anklicken.
+2. Windows-Taste + R, shell:startup eingeben, dort die Verknüpfung
+   „EU5 Ratgeber Waechter“ löschen.
+3. Zum Entfernen diesen Ordner und %LOCALAPPDATA%\EU5 Ratgeber löschen.
+
+LIZENZ
+
+MIT, siehe LICENSE.txt. Das Foto im Mod und das Programmsymbol stehen unter CC BY 2.0,
+siehe LICENSE.txt.
