@@ -272,6 +272,7 @@
 "Der Mod kann weiterlaufen. Ist etwas nötig, erscheint ein Update im Workshop.": "The mod can keep running. If anything is needed, an update will appear in the Workshop.",
 "Der Nahrungsschwerpunkt liefert derzeit nichts nach {}: {}. Für einzelne knappe Nahrungsgüter den Knappheitsschwerpunkt nehmen.": "Food Focus currently delivers nothing to {}: {}. For single scarce food goods, use Shortage Focus.",
 "Der Preis nähert sich monatlich um 5 % dem Zielpreis (Spieldefine MONTHLY_PRICE_CHANGE).": "The price moves 5% towards the Target Price each month (game define MONTHLY_PRICE_CHANGE).",
+"Der Ratgeber läuft und wartet auf den ersten Spielstand dieser Partie. Einmal speichern oder auf das Autosave warten, dann „Aktualisieren“ drücken.": "The advisor is running and waits for the first save of this game. Save once or wait for the autosave, then press “Refresh”.",
 "Der Wert der Automatisierung gilt für {} Kapazität; mehr Kapazität auf derselben Ware drückt den Preis (Spieltext zum Mindestgewinn) – ob er auf der Menge der Bestellung hält, ist offen.": "The automation value applies to {} capacity; more capacity on the same good pushes the price down (game text on minimum profit); whether it holds at the order's volume is open.",
 "Der neueste Spielstand ist nicht im Textformat, der Ratgeber kann ihn nicht lesen.": "The newest save is not in text format, so the advisor cannot read it.",
 "Derzeitiges Jahr ist {} {}": "Current year is {} {}",

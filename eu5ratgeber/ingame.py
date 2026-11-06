@@ -203,6 +203,12 @@ def _marke(kosten, sparen):
     return f"#R {m}#!" if sparen else m
 
 
+def ohne_doppelung(bereich, text):
+    """Auf Englisch beginnt ein Schritt oft mit dem Wort seines Bereichs: „Research: Research “Mills”“, „Build: Build X in Y“ (Test 06.11.)."""
+    s = str(text or "")
+    return s[len(bereich) + 1:] if not sprache.DEUTSCH and s.lower().startswith(f"{bereich} ".lower()) else s
+
+
 def _schritte(t, fk, S, F, d=None):
     xs = (F.get("erste_schritte") or [])[:SCHRITTE]
     for i in range(1, SCHRITTE + 1):
@@ -213,8 +219,9 @@ def _schritte(t, fk, S, F, d=None):
         b = BEREICH.get(e.get("bereich"), e.get("bereich"))
         link = _schritt_link(e, fk, S, d or {})
         sy = ingame_kacheln.geb_sym(link["z"]) if link and link["typ"] == "bau" else ""
-        _setze(t, f"S{i}", fk, f"#bold {loc(b)}:#! {loc(sy + str(e.get('text') or ''))}", _marke(e.get("kosten"), e.get("sparen")),
-               tips.schritt(f"{b}: {e.get('text')}", e.get("warum"), e.get("kosten")), e.get("bereich"), link)
+        text = ohne_doppelung(b, e.get("text"))
+        _setze(t, f"S{i}", fk, f"#bold {loc(b)}:#! {loc(sy + text)}", _marke(e.get("kosten"), e.get("sparen")),
+               tips.schritt(f"{b}: {text}", e.get("warum"), e.get("kosten")), e.get("bereich"), link)
     t[f"RG_RATGEBER_LEER_{fk}"] = (ue(t"Startstrategie: {loc(S['fehler'])}") if S.get("fehler") else
                                    "" if xs else ue("Nichts zu ändern – alle Einstellungen passen zum Schwerpunkt."))
 

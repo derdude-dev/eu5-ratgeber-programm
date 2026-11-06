@@ -178,6 +178,22 @@ def scan(db, names, stable):
             log(ue(t"{os.path.basename(path)}: FEHLER {e}"))
 
 
+def spielstaende(db):
+    with lock:
+        return db.execute("SELECT COUNT(*) FROM momentaufnahmen").fetchone()[0]
+
+
+def scan_und_schreiben(db, names, stable, wis):
+    """Neue Spielstände einlesen; kam einer dazu, die Seitenleiste sofort schreiben. Sonst gäbe erst der nächste Spielmonat den Anlass, im
+    pausierten Spiel also keiner (Test 06.11.). -> True, wenn geschrieben."""
+    vorher = spielstaende(db)
+    scan(db, names, stable)
+    if spielstaende(db) == vorher:
+        return False
+    ingame_schreiben(db, names, wis)
+    return True
+
+
 def read_log(db, reader):
     """Neue Monatszeilen des Daten-Mods aus debug.log übernehmen – in Stücken von höchstens livelog.MAX_LESEN, bis die Datei
     gelesen ist; nach jedem Stück den Lesestand speichern (ein Neustart liest dieselbe debug.log ab dort weiter, 31.10.).
@@ -282,8 +298,10 @@ def ingame_schreiben(db, names, wis):
         # Warnungen der Prüfung Spiel/Mod (Spiel-Update …) auch in der Übersicht im Spiel – das Konsolenfenster fehlt im
         # Hintergrundbetrieb (03.11.)
         warnungen = PRUEFUNG.get("warnungen") or []
-        if not d and warnungen:
-            ingame.schreiben(ingame.nur_hinweis(warnungen))
+        # Ohne Spielstand dieser Partie nichts stehen lassen: Sonst zeigt eine neue Partie die Empfehlungen der alten (Test 06.11.: Walachei in Bulgarien)
+        if not d:
+            ingame.schreiben(ingame.nur_hinweis(warnungen or [{"text": ue(
+                "Der Ratgeber läuft und wartet auf den ersten Spielstand dieser Partie. Einmal speichern oder auf das Autosave warten, dann „Aktualisieren“ drücken.")}]))
         if d and ingame.schreiben(ingame.texte(d, pruef=warnungen)) and not INGAME["geschrieben"]:
             log(ue(t"Seitenleiste im Spiel: Texte geschrieben ({(d.get('meta') or {}).get('land')}, {ingame.LIVE_DATEI.name})"))
             INGAME["geschrieben"] = True
@@ -333,7 +351,8 @@ def watcher(db, names, reader, wis=None):
             if time.monotonic() >= naechster:
                 if pruefung_aktualisieren() and offen is None:
                     ingame_schreiben(db, names, wis)
-                scan(db, names, stable)
+                if scan_und_schreiben(db, names, stable, wis):
+                    offen, geschrieben = None, time.monotonic()
                 fremde_nachladen(db, names)
                 naechster = time.monotonic() + POLL
         except Exception as e:                   # noqa: BLE001 – der Faden darf nicht still sterben (Prüfung 03.11.)
