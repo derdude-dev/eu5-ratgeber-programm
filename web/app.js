@@ -8,7 +8,18 @@ const pct = (v, d = 0) => (typeof v !== "number") ? "–" : nf(d).format(v * 100
 const sgn = (v, d = 1) => (typeof v !== "number") ? "–" : (v > 0 ? "+" : "") + nf(d).format(v);
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-const sum = a => a.reduce((s, v) => s + (typeof v === "number" ? v : 0), 0);
+// Addiert mit Ausgleich der Rundungsfehler wie Pythons sum(): Spielwerte haben drei Nachkommastellen, einfach addiert wurde aus 3,685 sonst
+// 3,6849999… und die Seite zeigte 3,68, die Seitenleiste 3,69 (Neumaier, Test 07.11.).
+const sum = a => {
+  let s = 0, c = 0;
+  for (const v of a) {
+    if (typeof v !== "number") continue;
+    const t = s + v;
+    c += Math.abs(s) >= Math.abs(v) ? (s - t) + v : (v - t) + s;
+    s = t;
+  }
+  return s + c;
+};
 const avg = a => { const n = a.filter(v => typeof v === "number"); return n.length ? sum(n) / n.length : null; };
 const ESTATE_COLOR = { crown_estate: "--c1", nobles_estate: "--c2", clergy_estate: "--c6", burghers_estate: "--c4",
                        peasants_estate: "--c3", dhimmi_estate: "--c7", tribes_estate: "--c5", cossacks_estate: "--c8" };
