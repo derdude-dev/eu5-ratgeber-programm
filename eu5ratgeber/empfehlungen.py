@@ -12,7 +12,7 @@ import json
 import math
 import re
 
-from . import handel, startstrategie
+from . import armee, handel, kriegsplan, startstrategie
 from . import sprache
 from .sprache import ue
 
@@ -29,8 +29,9 @@ def _ym(datum):
 
 
 def _de(v, d=2):
-    """Zahl in der Schreibweise der Ausgabe: 1234.5 -> 1.234,50"""
-    return sprache.ziffern(f"{v:,.{d}f}")
+    """Zahl in der Schreibweise der Ausgabe: 1234.5 -> 1.234,50 – gerundet wie die Seite und die Kacheln (sprache.zahl; Prüfer 08.11.:
+    Saldo 0,245 stand in der Empfehlung als 0,24, in der Kachel als 0,25)."""
+    return sprache.zahl(v, d)
 
 
 def _sgn(v, d=2):
@@ -163,19 +164,28 @@ def _fokus_wert(rec, werte):
     return rec
 
 
-def reihe(recs, fk):
+def reihe(recs, fk, ziel=False):
     """Empfehlungen für Schwerpunkt fk in ihrer Reihenfolge: Priorität, in ihr zuerst Empfehlungen zum Schwerpunkt, dann nach Punkten.
-    Unter den ersten KARTEN steht immer eine zum Schwerpunkt, wenn es eine gibt (sonst sähe man im Spiel keine)."""
+    Unter den ersten KARTEN steht immer eine zum Schwerpunkt, wenn es eine gibt (sonst sähe man im Spiel keine).
+    ziel (0.31, Kästchen „Ländergründung als Ziel“): Empfehlungen für das Ziel (Feld „ziel“) stehen in ihrer Stufe vor allen anderen,
+    und unter den ersten KARTEN steht mindestens eine davon (Regel des Ratgebers: das Ziel hat der Spieler selbst gesetzt)."""
     def treffer(r):
         return r.get("fokus") == fk and r.get("fokus_treffer", True)
 
     def punkte(r):
         return 1000 if treffer(r) else ((r.get("fokus_wert") or {}).get(fk) or (0,))[0]
-    E = sorted((r for r in recs if not r.get("fokus") or r.get("fokus") == fk), key=lambda r: (PRIO.get(r["prio"], 9), -punkte(r)))
-    if not any(treffer(r) for r in E[:KARTEN]):
-        rest = [i for i, r in enumerate(E) if treffer(r)]
-        if rest:
-            E.insert(KARTEN - 1, E.pop(rest[0]))
+
+    def zum_ziel(r):
+        return bool(ziel and r.get("ziel"))
+    E = sorted((r for r in recs if not r.get("fokus") or r.get("fokus") == fk),
+               key=lambda r: (PRIO.get(r["prio"], 9), not zum_ziel(r), -punkte(r)))
+    # Schwerpunkt auf die letzte sichtbare Karte, Ziel auf die vorletzte; zweimal, weil das Ziel eine Karte zum Schwerpunkt hinausschieben kann
+    for _ in range(2):
+        for pos, passt in ((KARTEN - 1, treffer), (KARTEN - 2, zum_ziel)):
+            if not any(passt(r) for r in E[:KARTEN]):
+                rest = [i for i, r in enumerate(E) if passt(r)]
+                if rest:
+                    E.insert(pos, E.pop(rest[0]))
     return E
 
 
@@ -791,35 +801,117 @@ def r_krieg(ctx):
 
 
 def r_kriegsgelegenheit(ctx):
-    """Kriegsgelegenheit (Nutzerwunsch 25.10., Kachel Nachbarn Punkt 4): Länder mit grüner Ampel (Kriegsgrund, kein
-    Waffenstillstand, unser Offensivbündnis mindestens 1,5 : 1 gegen ihr Verteidigungsbündnis – nachbarn.bewertung), die drei
-    mit dem besten Verhältnis. Sind wir schon im Krieg oder liegt unsere Mannstärke unter der Hälfte, steht das als
-    Einschränkung dabei."""
+    """Kriegsempfehlungen (Nutzerwunsch 25.10., Kachel Nachbarn Punkt 4; 0.31 Teil 2, Nutzer 08.11.: „konkrete kriegsempfehlungen, wer
+    wann angegriffen werden kann, ob man noch kriegsgründe erzeugen muss und welche armeestärke man haben sollte“) aus dem Kriegsplan
+    (kriegsplan.build): „jetzt“ höchstens 3 (mittel, Krieg möglich), „bald“ und „schaffen“ je höchstens 2 (niedrig: vorbereiten,
+    Kriegsgrund schaffen). Länder mit Orten für die Gründung als Ziel zuerst (Regel des Ratgebers). Sind wir schon im Krieg oder liegt
+    unsere Mannstärke unter der Hälfte, steht das als Einschränkung dabei. Länder außer Reichweite (kriegsplan.REICHWEITE, Test 08.11.:
+    Ungarn 0,11 : 1) bekommen keine Empfehlung."""
     nb = ctx["nachbarn"] or {}
+    # ohne fertigen Kriegsplan (ältere Aufrufe, Tests) aus der Kachel Nachbarn – Kriegsgründe dann nur laut Daten-Mod, ohne Art
+    kp = ctx.get("kriegsplan") or (kriegsplan.build(ctx.get("last"), nb, ctx.get("names")) if nb else {})
     wir = nb.get("wir") or {}
     out = []
-    if nb.get("veraltet"):
+    if nb.get("veraltet") or kp.get("veraltet"):
         return out                                    # Mod-Werte deutlich älter als der Spielstand (nachbarn.build)
-    gruen = [r for r in nb.get("laender") or [] if r["bewertung"]["stufe"] == "gruen"][:3]
     einschr = []
     if wir.get("kriege"):
         einschr.append(ue(t"Wir sind schon in {wir['kriege']} Krieg(en)."))
     mp, mx = wir.get("manpower"), wir.get("max_manpower")
     if _num(mp) and _num(mx) and mx > 0 and mp < 0.5 * mx:
         einschr.append(ue(t"Unsere Mannstärke ist nur {_de(mp, 2)} von {_de(mx, 2)} Tsd."))
-    for r in gruen:
-        b = r["bewertung"]
-        w = r["werte"]
-        heer = (ue(t"Heer {_de(w['army_size'], 1)} Tsd. Mann gegen unser {_de(wir.get('army_size') or 0, 1)} Tsd.")
-                if _num(w.get("army_size")) else "")
-        out.append(_rec(
-            f"kriegsgelegenheit:{r['tag']}", "mittel", "Militär", ue(t"Kriegsgelegenheit: {r['name']} ({_de(b['verhaeltnis'], 1)} : 1)")
-            if _num(b.get("verhaeltnis")) else ue(t"Kriegsgelegenheit: {r['name']}"),
-            [*(g[0].upper() + g[1:] + "." for g in b["gruende"]), heer, *(h[0].upper() + h[1:] + "." for h in b["hinweise"]),
-             *einschr, ue(t"Spielwerte laut Daten-Mod {nb.get('fremd_datum') or ''}.")],
-            ue(t"Krieg gegen {r['name']} vorbereiten: Kriegsgrund nutzen, Armeen sammeln, Verbündete rufen."),
-            "messen", ue("Kriegsverlauf in der Kriegskachel beobachten."), "nachbarn", ue(t"Krieg gegen {r['name']} erklärt")))
+    ziel_tags = {b["tag"] for b in (_ziel_option(ctx) or {}).get("besitzer") or []}
+    L = sorted(kp.get("laender") or [], key=lambda x: (kriegsplan.STUFEN.index(x["stufe"]), x["tag"] not in ziel_tags))
+    spion, nm = kp.get("spionagenetz"), ctx.get("names") or (lambda k: k)
+    n = dict.fromkeys(KRIEG_GRENZE, 0)
+    for x in L:
+        st = x["stufe"]
+        if st not in KRIEG_GRENZE or n[st] >= KRIEG_GRENZE[st] or x.get("erreichbar") is False:
+            continue
+        n[st] += 1
+        name, s = x["name"], x["staerke"]
+        kbtxt = _kb_text(x["kb"]) or ue("dem vorhandenen Kriegsgrund")
+        gr = []
+        if _kb_text(x["kb"]):
+            seit = x["kb"][0].get("seit")
+            gr.append(ue(t"Kriegsgrund: {kbtxt}") + (ue(t" seit {seit}") if seit else "") + ".")
+        elif x["kb"]:
+            gr.append(ue("Kriegsgrund vorhanden laut Daten-Mod – seine Art steht erst im nächsten Spielstand."))
+        gr += _krieg_staerke(x)
+        ws, sch = x.get("waffenstillstand"), x.get("schaffen")
+        if ws:
+            gr.append(ue(t"Waffenstillstand bis ca. {ws['bis']} (Frieden {ws['frieden']}, {ws['kriegspunkte']} Kriegspunkte; Dauer laut Spieldateien).")
+                      if ws.get("bis") else ue("Waffenstillstand – das Ende berechnet der Ratgeber erst mit dem nächsten Spielstand."))
+        if sch:
+            gr.append(ue(t"Kriegsgrund „{sch['name']}“ wird geschaffen: {_de(sch['fortschritt'] or 0, 0)} %")
+                      + (ue(t", fertig ca. {sch['fertig']}.") if sch.get("fertig") else "."))
+        if x["im_krieg"]:
+            gr.append(ue(t"{name} führt gerade Krieg – Kräfte gebunden."))
+        gr += einschr
+        quelle = (ue(t"Spielwerte laut Daten-Mod {nb.get('fremd_datum') or ''}")
+                  + (ue(", Kriegsgründe laut Spielstand") if kp.get("spielstand_kb") else "") + ".")
+        if st == "jetzt":
+            titel = (ue(t"Krieg möglich: {name} ({_de(s['buendnis'], 1)} : 1)") if _num(s.get("buendnis"))
+                     else ue(t"Krieg möglich: {name}"))
+            out.append(_rec(f"kriegsgelegenheit:{x['tag']}", "mittel", "Militär", titel, [*gr, quelle],
+                            ue(t"Krieg gegen {name} erklären mit {kbtxt}: Armeen sammeln, Verbündete rufen."),
+                            "messen", ue("Kriegsverlauf in der Kriegskachel beobachten."), "nachbarn", ue(t"Krieg gegen {name} erklärt")))
+        elif st == "bald":
+            if ws:
+                schritt = ue(t"Waffenstillstand bis ca. {ws['bis']} abwarten") if ws.get("bis") else ue("Waffenstillstand abwarten")
+            elif sch and not x["kb"]:
+                schritt = (ue(t"Kriegsgrund „{sch['name']}“ fertig ca. {sch['fertig']}") if sch.get("fertig")
+                           else ue(t"Kriegsgrund „{sch['name']}“ wird geschaffen"))
+            elif _num(s.get("buendnis_faktor")) and s["buendnis_faktor"] >= kriegsplan.BUENDNIS_FAKTOR:
+                schritt = ue("erst ihr Bündnis schwächen")
+            elif _num(s.get("fehlt_buendnis")) and s["fehlt_buendnis"] > 0:
+                schritt = ue(t"mit ihren Verbündeten fehlen etwa {_de(s['fehlt_buendnis'], 0)} Tsd. Mann")
+            elif _num(s.get("fehlt")) and s["fehlt"] > 0:
+                schritt = ue(t"es fehlen {_de(s['fehlt'], 1)} Tsd. Mann")
+            else:
+                schritt = ue(t"Stärke auf {_de(s['ziel'], 1)} : 1 bringen")
+            out.append(_rec(f"kriegsgelegenheit:{x['tag']}", "niedrig", "Militär", ue(t"Krieg gegen {name} vorbereiten: {schritt}"),
+                            [*gr, quelle], ue(t"Krieg gegen {name} vorbereiten: {schritt}."), "messen",
+                            ue("Kriegsverlauf in der Kriegskachel beobachten."), "nachbarn", ue(t"Krieg gegen {name} erklärt")))
+        else:
+            k = x["schaffbar"][0]
+            andere = ", ".join(ue(t"„{y['name']}“") for y in x["schaffbar"][1:4])
+            out.append(_rec(
+                f"kriegsgrund:{x['tag']}", "niedrig", "Militär", ue(t"Kriegsgrund gegen {name} schaffen: „{k['name']}“"),
+                [ue("Noch kein Kriegsgrund gegen sie; das Spiel erlaubt, einen zu schaffen (can_create_casus_belli_of_type_on).")
+                 + (ue(t" Weitere möglich: {andere}.") if andere else ""), *gr, quelle],
+                ue(t"Im Diplomatiefenster von {name} unter „{nm('CATEGORY_HOSTILE_ACTIONS')}“ „Kriegsgrund schaffen“ wählen")
+                + (ue(t" – kostet {spion} {nm('game_concept_spy_network')}.") if _num(spion) else "."),
+                "messen", ue("Fortschritt beim Schaffen im Diplomatiefenster beobachten."), "nachbarn",
+                ue(t"Kriegsgrund gegen {name} geschaffen")))
     return out
+
+
+# 0.31 Teil 2: so viele Empfehlungen je Stufe des Kriegsplans (Regel des Ratgebers – sonst überdecken Kriege die Wirtschaft)
+KRIEG_GRENZE = {"jetzt": 3, "bald": 2, "schaffen": 2}
+
+
+def _krieg_staerke(x):
+    """Stärke-Sätze eines Kriegsplan-Eintrags: Bündnisse (Spielwerte), Militärstärke gegen das Land allein in Tsd. Mann, Isolieren."""
+    s, name, out = x["staerke"], x["name"], []
+    if s.get("unendlich"):
+        out.append(ue("Ihr Verteidigungsbündnis hat die Stärke 0."))
+    elif _num(s.get("buendnis")):
+        out.append(ue(t"Bündnisse: unser Angriffsbündnis gegen ihr Verteidigungsbündnis {_de(s['buendnis'], 1)} : 1, nötig {_de(s['ziel'], 1)} : 1."))
+    if _num(s.get("wir")) and _num(s.get("sie")):
+        out.append(ue(t"Militärstärke gegen {name} allein (Aufgebote, Heer, Mannstärke): wir {_de(s['wir'], 1)}, sie {_de(s['sie'], 1)} Tsd. Mann")
+                   + (ue(t" – für {_de(s['ziel'], 1)} : 1 fehlen {_de(s['fehlt'], 1)} Tsd. Mann.") if _num(s.get("fehlt")) and s["fehlt"] > 0 else "."))
+    if _num(s.get("fehlt_buendnis")) and s["fehlt_buendnis"] > 0:
+        out.append(ue(t"Mit ihren Verbündeten fehlen für {_de(s['ziel'], 1)} : 1 etwa {_de(s['fehlt_buendnis'], 0)} Tsd. Mann (geschätzt aus den "
+                      t"Bündnisstärken des Spiels)."))
+    if _num(s.get("buendnis_faktor")) and s["buendnis_faktor"] >= kriegsplan.BUENDNIS_FAKTOR:
+        out.append(ue(t"Ihr Verteidigungsbündnis ist {_de(s['buendnis_faktor'], 1)}-mal so stark wie das Land allein."))
+    return out
+
+
+def _kb_text(kb):
+    """Kriegsgründe mit bekannter Art in Anführungszeichen; ohne bekannte Art (nur Daten-Mod) leer."""
+    return ", ".join(ue(t"„{k['name']}“") for k in kb if k.get("typ"))
 
 
 # Schwelle der Regel „Zölle“ (Regel des Ratgebers): Zölle ab 10 % des Routengewinns vor Zoll, ab 25 % Wichtigkeit „mittel“
@@ -1249,6 +1341,7 @@ def r_gruendung(ctx):
     „Gründbares Land“ (ALERT_POSSIBLE_FORMABLE_COUNTRIES_TITLE)."""
     G = ctx.get("gruendung") or {}
     weg = G.get("weg") or {}
+    zo = _ziel_option(ctx)
     out = []
     for o in G.get("optionen") or []:
         g = o["gebiet"]
@@ -1256,7 +1349,7 @@ def r_gruendung(ctx):
                   t"{_pz(g['gefordert'], 0)} = {g['noetig']} Orte (Spieldatei formable_countries)."))
         wirkung = "; ".join(x["text"] for x in o.get("wirkung") or [] if x.get("ok") is not False) or ue("laut Spieldatei keine weitere Wirkung")
         if o.get("gruendbar"):
-            out.append(_rec(
+            r = _rec(
                 f"gruendung:{o['key']}", "hoch", "Ländergründung", ue(t"Jetzt gründbar: {o['name']} (Grad {o.get('grad') or '?'})"),
                 [gebiet, ue(t"Bedingungen: alle {o['bedingungen_alle']} erfüllt.") if o["bedingungen_alle"] else ue("Keine weiteren Bedingungen."),
                  ue(t"Wirkung (form_effect): {wirkung}.")],
@@ -1264,8 +1357,11 @@ def r_gruendung(ctx):
                 + ue(t"den Reiter „{weg.get('reiter') or ue('Gründbare')}“ (neben „Entscheidungen“) öffnen und „„{o['name']}“ gründen“ wählen – "
                 t"auch über den Hinweis „{weg.get('hinweis') or ue('Gründbares Land')}“."),
                 "Spielwert", ue(t"Laut Spieldatei: {wirkung}. Name, Flagge und Farbe des Landes wechseln (Europedia „Gründbares Land“)."),
-                "gruendung", ue(t"Gegründet: {o['name']}")))
-        elif o.get("fast"):
+                "gruendung", ue(t"Gegründet: {o['name']}"))
+            if o is zo:
+                r["ziel"] = "gruendung"
+            out.append(r)
+        elif o.get("fast") and o is not zo:          # als Ziel gesetzt: die Schritte stehen einzeln da (r_gruendung_ziel)
             mil = [m["text"] for m in (o.get("empfehlungen") or {}).get("militaer") or [] if not m.get("offen")][:2]
             out.append(_rec(
                 f"gruendung_fast:{o['key']}", "mittel", "Ländergründung",
@@ -1278,14 +1374,187 @@ def r_gruendung(ctx):
     return out
 
 
+# Ländergründung als Ziel (Mod 0.31): so viele Schritte des Gebietsplans werden je eine Empfehlung (Regel des Ratgebers)
+ZIEL_SCHRITTE = 3
+# Wichtigkeit eines Eroberungsschritts nach der Ampel des Besitzers (Kachel Nachbarn); sonst niedrig
+ZIEL_PRIO = {"gruen": "mittel", "gelb": "mittel"}
+
+
+def _ziel_option(ctx):
+    """Gründung, die als Ziel gilt, wenn das Kästchen im Spiel an ist: die Auswahl der Kachel Ländergründung (gruendung.standard –
+    gründbar zuerst, dann der größte Fortschritt). Ohne Kästchen oder ohne Gründung None."""
+    if not (ctx.get("ziel") or {}).get("gruendung"):
+        return None
+    G = ctx.get("gruendung") or {}
+    return next((o for o in G.get("optionen") or [] if o.get("key") == G.get("standard")), None)
+
+
+def r_armee(ctx):
+    """Armeebuilder (0.31 Teil 3, Nutzer 08.11.): Heer bis zur Obergrenze des Spiels auffüllen, wenn Mannstärke da ist; für den Krieg mit
+    dem besten Ziel in Reichweite die fehlenden Mann als Regimenter. Beides niedrig (Regel des Ratgebers: Vorschläge, keine Warnungen); die
+    Grenzen (Mannstärke, Saldo) stehen in den Gründen. Ohne Mannstärke (Obergrenze 0) mittel: was als Nächstes Mannstärke bringt –
+    ein Mannstärke-Gebäude bauen (Klick öffnet den Ort) oder den Fortschritt dafür erforschen (Test 08.11.)."""
+    h = (ctx.get("armee") or {}).get("heer") or {}
+    if not h:
+        return []
+    out = []
+    mischung = lambda vs: ", ".join(ue(t"{v['anzahl']} × {v['einheit']}") for v in vs)   # noqa: E731
+    mp = _num(h.get("max_mannstaerke")) and h["max_mannstaerke"] > 0
+    grenzen = list(h.get("grenzen") or [])
+    if h.get("vorschlag") and mp:
+        gedeckelt = _num(h.get("traegt")) and _num(h.get("grenze")) and h["traegt"] < h["grenze"]
+        out.append(_rec(
+            "armee:heer", "niedrig", "Militär",
+            ue(t"Heer auffüllen, so weit die Mannstärke trägt: {mischung(h['vorschlag'])}") if gedeckelt
+            else ue(t"Heer bis zur Obergrenze auffüllen: {mischung(h['vorschlag'])}"),
+            [ue(t"Regulärtruppen {_de(h.get('jetzt') or 0, 0)} von {_de(h['grenze'], 0)} Mann (Obergrenze laut Spiel).")
+             if _num(h.get("grenze")) else "",
+             ue(t"Unterhalt etwa {_de(h['gold'], 2)} Gold je Monat, Saldo {_de(h['saldo'], 2)} (geschätzt aus den Preisen im Heimatmarkt).")
+             if _num(h.get("gold")) and _num(h.get("saldo")) else "",
+             ue("Mischung: Tross mindestens wie die KI des Spiels, Kavallerie höchstens ein Drittel, je Kategorie die meiste Kampfkraft je "
+                "Gold (Regel des Ratgebers; Kachel Armee planen)."), *grenzen],
+            ue("Im Militärfenster unter „Regulärtruppen ausheben“ die Regimenter ausheben."), "messen",
+            ue("Regulärtruppen im Militärfenster ansehen."), "armee", ue("Heer aufgefüllt")))
+    nq = h.get("naechste_quelle")
+    if nq and h.get("knapp"):
+        # Test 08.11.: Walachei seit 1337 ohne Mannstärke – Holland bekam sie erst mit der Serjeantry (armee.py); nach der Serjeantry
+        # 0,091 Tsd. – weniger als ein Kampfregiment, darum weiter die nächste Quelle. knapp (armee.build): Mannstärke 0, fasst kein
+        # Kampfregiment oder trägt ohne Heer kein Regiment Infanterie – dann lässt sich gar kein Regulärregiment aufstellen
+        art, q = nq
+        grund = [h["knapp"],
+                 # Nutzer 08.11.: die Serjeantry tickt mit den Arbeitern hoch – gebaute, noch nicht voll besetzte Quellen nennen
+                 *armee.fuellt_sich(h.get("quellen") or []),
+                 ue("Laut Spiel kommt Mannstärke aus Mannstärke-Gebäuden oder bestimmten Fortschritten."),
+                 ue(t"{q['name']}: Monatliche Mannstärke {q['wert_text']} je Stufe laut Spieldatei bei voller Belegschaft")
+                 + (ue(", nur in der Hauptstadt, eines je Land.") if q["hauptstadt"] else ".")]
+        if art == "bauen":
+            wo = ue(t" in {q['ort']}") if q.get("ort") else ""
+            r = _rec("armee:mannstaerke", "mittel", "Militär", ue(t"Mannstärke schaffen: {q['name']}{wo} bauen"), grund,
+                     ue(t"Im Ort {q['ort']} „{q['name']}“ bauen (Baumenü des Orts).") if q.get("ort")
+                     else ue(t"„{q['name']}“ in einem Ort mit unserer Kultur bauen."),
+                     "messen", ue("Mannstärke in der Kopfzeile und in der Kachel Armee planen beobachten."), "armee",
+                     ue(t"{q['name']} gebaut"))
+            if q.get("ort_id") is not None:
+                r["ort_id"], r["ort"] = q["ort_id"], q["ort"]
+        else:
+            a = q["durch"][0]
+            r = _rec("armee:mannstaerke", "mittel", "Militär", ue(t"Mannstärke schaffen: Fortschritt „{a['name']}“ erforschen"),
+                     grund + [ue(t"Der Fortschritt schaltet „{q['name']}“ frei.")],
+                     ue(t"Im Fenster Fortschritte „{a['name']}“ erforschen, dann „{q['name']}“ bauen."), "messen",
+                     ue("Mannstärke in der Kopfzeile und in der Kachel Armee planen beobachten."), "forschung",
+                     ue(t"Fortschritt „{a['name']}“ erforscht"))
+        out.append(r)
+    kr = h.get("krieg")
+    if kr and kr.get("mischung"):
+        out.append(_rec(
+            f"armee:krieg:{kr['tag']}", "niedrig", "Militär",
+            ue(t"Für Krieg gegen {kr['name']}: +{_de(kr['fehlt_mann'], 0)} Mann, etwa {mischung(kr['mischung'])}"),
+            [ue("Fehlende Militärstärke für 1,5 : 1 mit ihren Verbündeten (geschätzt, Kriegsplan).") if kr.get("mit_verbuendeten")
+             else ue("Fehlende Militärstärke für 1,5 : 1 gegen das Land allein (Kriegsplan)."), *grenzen],
+            ue("Regulärtruppen ausheben oder im Krieg die Aufgebote ausheben; Verbündete gewinnen senkt den Bedarf."), "messen",
+            ue("Stärke in der Kachel Nachbarn vergleichen."), "armee", ue(t"Heer für den Krieg gegen {kr['name']} verstärkt")))
+    return out
+
+
+def _krieg_satz(ctx, tag):
+    """Ein Satz zum Kriegsgrund gegen tag aus dem Kriegsplan (0.31 Teil 2) – für die Gründung als Ziel; ohne Mod-Werte zu dem Land None."""
+    x = next((y for y in (ctx.get("kriegsplan") or {}).get("laender") or [] if y["tag"] == tag), None)
+    if not x:
+        return None
+    if x["kb"]:
+        kbtxt = _kb_text(x["kb"])
+        return ue(t"Kriegsgrund vorhanden: {kbtxt}.") if kbtxt else ue("Kriegsgrund vorhanden.")
+    if x["schaffen"]:
+        return ue(t"Kriegsgrund „{x['schaffen']['name']}“ wird geschaffen: {_de(x['schaffen']['fortschritt'] or 0, 0)} %.")
+    if x["schaffbar"]:
+        return ue(t"Kriegsgrund schaffbar: „{x['schaffbar'][0]['name']}“.")
+    return ue("Laut Spiel lässt sich zurzeit kein Kriegsgrund gegen sie schaffen.")
+
+
+def r_gruendung_ziel(ctx):
+    """Ländergründung als Ziel (Mod 0.31, Nutzer 08.11.: „die ländergründung als ziel sollte auch in die empfehlung einfließen, dazu
+    sollte noch ein aktivierbares kästchen erstellt werden“). Ist das Kästchen im Spiel an, wird der Plan der Kachel Ländergründung
+    (gruendung._empfehlungen) für die Gründung der Auswahl zu Empfehlungen: die nächsten ZIEL_SCHRITTE Schritte für die fehlenden Orte
+    in der Reihenfolge der Kachel (Klientelländer eingliedern, dann erobern nach Ampel), die Hauptstadt, offene Bedingungen und
+    Hinweise zur Diplomatie. Ist die Gründung schon möglich, steht das in r_gruendung („Jetzt gründbar“, als Ziel markiert).
+    Wichtigkeit (Regel des Ratgebers): mittel für Eingliedern, Erobern bei grüner oder gelber Ampel, Hauptstadt und Bedingungen;
+    niedrig für Erobern bei roter oder grauer Ampel und für Diplomatie-Hinweise."""
+    o = _ziel_option(ctx)
+    if not o or o.get("gruendbar"):
+        return []
+    name, g, key = o["name"], o.get("gebiet") or {}, o["key"]
+    E = o.get("empfehlungen") or {}
+    besitzer = {b["tag"]: b for b in o.get("besitzer") or []}
+    stand = (ue(t"Ziel {name}: {g.get('unsere')} von {g.get('noetig')} nötigen Orten, es fehlen {g.get('fehlt')} (Kachel Ländergründung).")
+             if g.get("fehlt") else ue(t"Ziel {name}: das Gebiet reicht (Kachel Ländergründung)."))
+    ampel = {"gruen": ue("Ampel grün"), "gelb": ue("Ampel gelb"), "rot": ue("Ampel rot"), "grau": ue("Ampel grau")}
+    out = []
+
+    def neu(kennung, prio, titel, gruende, handlung, wirkung, marker, **mehr):
+        r = _rec(f"ziel:{key}:{kennung}", prio, "Ländergründung", titel, gruende, handlung, "messen", wirkung, "gruendung", marker)
+        r.update(ziel="gruendung", **mehr)
+        out.append(r)
+
+    for s in ((E.get("plan") or {}).get("schritte") or [])[:ZIEL_SCHRITTE]:
+        b = besitzer.get(s["tag"]) or {}
+        orte = ue(t"{s['orte']} Ort") if s["orte"] == 1 else ue(t"{s['orte']} Orte")
+        beispiele = ", ".join(b.get("beispiele") or [])
+        if s["weg"] == "eingliedern":
+            neu(s["tag"], "mittel", ue(t"Für {name}: {s['name']} eingliedern ({orte})"),
+                [stand, ue(t"Benötigte Orte von {s['name']}: {beispiele}.") if beispiele else "",
+                 ue("Klientelland – seine Orte zählen erst nach der Eingliederung (Annahme des Ratgebers).")],
+                ue(t"Klientelland {s['name']} eingliedern (Annexion)."), ue(t"Gebiet für {name}: +{orte}"),
+                ue(t"{s['name']} eingegliedert"), tag=s["tag"])
+            continue
+        gruende = [stand, ue(t"Benötigte Orte von {s['name']}: {beispiele}.") if beispiele else ""]
+        if s.get("ampel") in ampel:
+            gruende.append(ampel[s["ampel"]] + (f" ({'; '.join(b.get('gruende')[:2])})." if b.get("gruende") else "."))
+        else:
+            gruende.append(ue("Keine Mod-Werte zu diesem Land (keine Beziehung zu uns) – Stärke unbekannt."))
+        if b.get("waffenstillstand") == 1:
+            gruende.append(ue("Waffenstillstand mit uns."))
+        satz = _krieg_satz(ctx, s["tag"])            # 0.31 Teil 2: Kriegsgrund laut Kriegsplan (Art, im Bau, schaffbar)
+        if satz:
+            gruende.append(satz)
+        elif b.get("kriegsgrund"):
+            gruende.append(ue("Kriegsgrund vorhanden."))
+        neu(s["tag"], ZIEL_PRIO.get(s.get("ampel"), "niedrig"),
+            ue(t"Für {name}: {orte} von {s['name']} erobern"), gruende,
+            ue(t"Krieg gegen {s['name']} vorbereiten und die Orte als Kriegsziel fordern – Stärke und Kriegsgrund: Kachel Nachbarn."),
+            ue(t"Gebiet für {name}: +{orte}"), ue(t"Orte von {s['name']} erobert"), tag=s["tag"])
+    if g.get("hauptstadt_noetig") and g.get("hauptstadt_ok") is False:
+        neu("hauptstadt", "mittel", ue(t"Für {name}: Hauptstadt in das geforderte Gebiet"),
+            [stand, ue("Die Gründung verlangt die Hauptstadt in einem der geforderten Orte (Spieldatei formable_countries: capital_required).")],
+            ue("Die Hauptstadt in einen der geforderten Orte verlegen."), ue(t"Bedingung für {name} erfüllt"), ue("Hauptstadt verlegt"))
+    nr = 0
+    for bereich in ("staat", "diplomatie", "militaer", "wirtschaft"):
+        for x in E.get(bereich) or []:
+            if x.get("offen"):
+                continue
+            if x.get("art") == "bedingung":
+                nr += 1
+                neu(f"bedingung{nr}", "mittel", ue(t"Für {name}: {x['text']}"), [stand, x.get("grund")], x["text"],
+                    ue(t"Bedingung für {name} erfüllt – im Spiel im Reiter „Gründbare“ prüfen."), ue(t"Bedingung für {name} erfüllt"))
+            elif x.get("art") in ("verbuendet", "oberherr", "isolieren"):
+                nr += 1
+                neu(f"diplomatie{nr}", "niedrig", ue(t"Für {name}: {x['text']}"), [stand, x.get("grund")], x["text"],
+                    ue(t"Weg zu {name} frei"), ue(t"Für {name}: {x['text']}"))
+    if not out and g.get("fehlt"):
+        x = next((m for m in E.get("militaer") or [] if m.get("offen")), None)
+        neu("gebiet", "niedrig", ue(t"Für {name}: {g['fehlt']} Orte fehlen"), [stand, x and x["text"]],
+            ue("Einzelheiten und Besitzer: Kachel Ländergründung."), ue(t"Gebiet für {name} erweitert"), ue(t"Gebiet für {name} erweitert"))
+    return out
+
+
 REGELN = (r_krieg, r_kriegsgelegenheit, r_krankheit, r_steuergrundlage, r_gebaeude_ohne_gewinn, r_preis_ueberangebot, r_staende, r_ausbau,
           r_zoelle, r_bestellung_ohne_route, r_bestellung_gewinn, r_routen_unter_mindest, r_bestellung_zoll, r_haendler_frei,
-          r_bestellung_fokus, r_forschung_fokus, r_gruendung, r_ungenutzt)
+          r_bestellung_fokus, r_forschung_fokus, r_gruendung, r_gruendung_ziel, r_armee, r_ungenutzt)
 
 
 def build(db, snaps, lv, names=None, wis=None, voll_estates=None, script_values=None, modtypen=None, bau=None, kw=None,
-          kriege=None, nachbarn=None, handel=None, techbaum=None, gruendung=None, wp=None):
-    """Alle Empfehlungen, sortiert nach Wichtigkeit. Fehler einer Regel stoppen die anderen nicht (Meldung in der Liste)."""
+          kriege=None, nachbarn=None, handel=None, techbaum=None, gruendung=None, wp=None, ziel=None, kriegsplan=None, armee=None):
+    """Alle Empfehlungen, sortiert nach Wichtigkeit. Fehler einer Regel stoppen die anderen nicht (Meldung in der Liste).
+    ziel: Ziele aus dem Spiel ({"gruendung": an?}, history.ziele_lesen – Mod 0.31, Kästchen „Ländergründung als Ziel“)."""
     if not snaps:
         return []
     last = snaps[-1]
@@ -1319,6 +1588,12 @@ def build(db, snaps, lv, names=None, wis=None, voll_estates=None, script_values=
            "techbaum": techbaum or {},
            # ab 30.10.: Kachel Ländergründung (gruendung.build) für die Regel r_gruendung
            "gruendung": gruendung or {},
+           # ab 08.11. (Mod 0.31): Kästchen „Ländergründung als Ziel“ für r_gruendung_ziel und die Reihenfolge
+           "ziel": ziel or {},
+           # ab 08.11. (0.31 Teil 2): Kriegsplan je Land (kriegsplan.build) für r_kriegsgelegenheit und die Gründung als Ziel
+           "kriegsplan": kriegsplan or {},
+           # ab 08.11. (0.31 Teil 3): Armeebuilder (armee.build) für r_armee
+           "armee": armee or {},
            # ab 05.11.: Schwerpunkte des Wirtschaftsplans (Abschnitt „Schwerpunkt“ oben)
            "fokus": {fk: (F, startstrategie.fokus_kontext(fk, wp, modtypen or {})) for fk, F in ((wp or {}).get("fokusse") or {}).items()}}
     out = []
@@ -1338,8 +1613,17 @@ def build(db, snaps, lv, names=None, wis=None, voll_estates=None, script_values=
         # im Text der Name des Schwerpunkts (Nutzer 05.11.: „nicht die nummer sondern der name des schwerpunktes“)
         for fk, w in (r.get("fokus_wert") or {}).items():
             w[1] = f"{ctx['fokus'][fk][0]['name']} ({w[1]})"
+    # Ländergründung als Ziel: Kriegsgelegenheiten gegen Besitzer geforderter Orte gehören dazu
+    zo = _ziel_option(ctx)
+    if zo:
+        besitzer = {b["tag"]: b for b in zo.get("besitzer") or []}
+        for r in out:
+            art, _, tag = r["id"].partition(":")
+            if art in ("kriegsgelegenheit", "kriegsgrund") and tag in besitzer:
+                r["ziel"] = "gruendung"
+                r["gruende"].append(ue(t"Besitzt {besitzer[tag]['orte']} der Orte für das Ziel {zo['name']}."))
     out.sort(key=lambda r: PRIO.get(r["prio"], 9))
     for fk in ctx["fokus"]:
-        for i, r in enumerate(reihe(out, fk)):
+        for i, r in enumerate(reihe(out, fk, ziel=bool(zo))):
             r.setdefault("rang", {})[fk] = i
     return out

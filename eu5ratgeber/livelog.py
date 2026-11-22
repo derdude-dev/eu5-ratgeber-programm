@@ -29,6 +29,11 @@ NEW_ENTRY = re.compile(rb"^\[\d\d:\d\d:\d\d\]")    # jede Logzeile beginnt mit d
 UHRZEIT = re.compile(rb"^\[(\d\d:\d\d:\d\d)\]")
 # Knopf „Im Browser öffnen“ der Seitenleiste im Spiel (Mod 0.28): scripted gui rg_browser schreibt per debug_log diese Zeile
 BROWSER = b"RG_BROWSER"
+# Mod 0.31: Kästchen „Ländergründung als Ziel“ – Klick (scripted gui rg_gruendungsziel) und jeden Monat (on_action) „RG_ZIEL <Land> <Ziel> 0/1“
+ZIEL = re.compile(rb"\bRG_ZIEL ([A-Z0-9_]+) ([a-z_]+) ([01])\b")
+# Mod 0.31: gespieltes Land (scripted gui rg_land: Spielstand geladen, Reiter geöffnet, „Aktualisieren“) – Test 08.11.: nach dem Laden der
+# Walachei zeigte die Seitenleiste bis zum nächsten Spielmonat Bulgarien
+LAND = re.compile(rb"\bRG_LAND ([A-Z0-9_]+)\b")
 FIELD = re.compile(r"(\w+)=(\S*)")
 BUILDING_KEY = re.compile(r"BUILDING_TYPE,(\w+)")   # typ=\x15TOOLTIP:BUILDING_TYPE,temple \x15L; Tempel\x15!\x15!
 DECIMALS = 3   # wie LOG_DECIMALS im Mod
@@ -327,6 +332,14 @@ class LogReader:
             if BROWSER in raw and b"jomini_effect_impl" in raw:
                 m = UHRZEIT.match(raw)       # Uhrzeit der Zeile: der Ratgeber reagiert nur auf frische Klicks
                 out.append({"art": "browser", "zeit": m.group(1).decode() if m else None})
+                continue
+            z = ZIEL.search(raw) if b"RG_ZIEL" in raw and b"jomini_effect_impl" in raw else None
+            if z:
+                out.append({"art": "ziel", "tag": z.group(1).decode(), "ziel": z.group(2).decode(), "wert": z.group(3) == b"1"})
+                continue
+            z = LAND.search(raw) if b"RG_LAND" in raw and b"jomini_effect_impl" in raw else None
+            if z:
+                out.append({"art": "land_aktiv", "tag": z.group(1).decode()})
                 continue
             if b"RG1" not in raw and b"RG2" not in raw:
                 continue

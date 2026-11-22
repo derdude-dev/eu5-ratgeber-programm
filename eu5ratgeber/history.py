@@ -11,7 +11,7 @@ import sqlite3
 import time
 import zlib
 
-from . import empfehlungen, handel, krieg, nachbarn, snapshot, wirtschaftsplan
+from . import armee, besonderheiten, empfehlungen, handel, krieg, kriegsplan, nachbarn, snapshot, wirtschaftsplan
 from . import sprache
 from . import techbaum                       # Ansicht Fortschritte (30.10.): Vorschlag je Schwerpunkt für Forschung/Empfehlungen
 from . import gruendung                      # Kachel Ländergründung (30.10.)
@@ -53,6 +53,9 @@ CREATE TABLE IF NOT EXISTS monat_details (
 );
 CREATE TABLE IF NOT EXISTS logstand (
     pfad TEXT PRIMARY KEY, stand TEXT
+);
+CREATE TABLE IF NOT EXISTS ziele (
+    tag TEXT, ziel TEXT, wert INTEGER, erfasst TEXT, PRIMARY KEY (tag, ziel)
 );
 CREATE INDEX IF NOT EXISTS ix_extra_monat ON monat_extra (tag, jahr, monat);
 CREATE INDEX IF NOT EXISTS ix_details_monat ON monat_details (tag, jahr, monat);
@@ -228,6 +231,38 @@ def logstand_speichern(db, pfad, stand):
     """Lesestand nach dem Speichern der gelesenen Zeilen sichern (31.10.: Neustart liest die debug.log nicht wieder von vorn)."""
     db.execute("INSERT OR REPLACE INTO logstand VALUES (?,?)", (pfad, json.dumps(stand, ensure_ascii=False)))
     db.commit()
+
+
+# Ziele aus dem Spiel (Mod 0.31, Nutzer 08.11.: Kästchen „Ländergründung als Ziel“): die Variable rg_ziel_gruendung am Land steht im
+# Spielstand; das Programm erfährt sie aus den Zeilen „RG_ZIEL <Land> <Ziel> 0/1“ (Klick und jeden Monat) und merkt sie sich je Land.
+# Wie die übrigen Mod-Werte gilt sie je Land, nicht je Partie (zwei Partien mit demselben Land: die nächste Monatszeile stellt richtig).
+ZIELE = ("gruendung",)
+
+
+def ziele_speichern(db, recs):
+    """Zeilen {art: ziel, tag, ziel, wert} übernehmen, die letzte je Land und Ziel gilt. -> [(tag, ziel, wert)] der geänderten."""
+    neu = {}
+    for r in recs:
+        if r.get("ziel") in ZIELE:
+            neu[(r["tag"], r["ziel"])] = bool(r["wert"])
+    geaendert = []
+    for (tag, ziel), wert in neu.items():
+        alt = db.execute("SELECT wert FROM ziele WHERE tag=? AND ziel=?", (tag, ziel)).fetchone()
+        if alt is None or bool(alt[0]) != wert:
+            geaendert.append((tag, ziel, wert))
+        db.execute("INSERT OR REPLACE INTO ziele VALUES (?,?,?,datetime('now','localtime'))", (tag, ziel, int(wert)))
+    if neu:
+        db.commit()
+    return geaendert
+
+
+def ziele_lesen(db, tag):
+    """{Ziel: an?} für ein Land; ohne Zeile aus dem Spiel aus."""
+    try:
+        an = {z: bool(w) for z, w in db.execute("SELECT ziel, wert FROM ziele WHERE tag=?", (tag,))}
+    except sqlite3.OperationalError:                 # Datenbank älter als das Schema (nur lesend geöffnet)
+        an = {}
+    return {z: an.get(z, False) for z in ZIELE}
 
 
 def monats_stuecke(recs):
@@ -943,6 +978,15 @@ def series(db, pid, names=None, wis=None, voll=None):
                                      _ortname(db, names))),
         # Kachel Nachbarn und Kriegsgelegenheiten (25.10.): Stärke der Länder mit Beziehung, Ampel, Spielstand aller Länder
         "nachbarn": (nb := nachbarn.build(db, last, names, kr)),
+        # Kriegsplan (0.31 Teil 2, 08.11.): je Land der Kachel Nachbarn Kriegsgrund (Spielstand, Mod), Waffenstillstand bis, Stärke
+        "kriegsplan": (kp := kriegsplan.build(last, nb, names, _voll(voll, "casus_belli"), _voll(voll, "defines"),
+                                              _voll(voll, "diplomatic_costs"))),
+        # Armeebuilder (0.31 Teil 3, 08.11.): Heer und Marine – Stand, Obergrenze laut Spiel, Vorschlag, Bedarf für den Krieg (nutzt kp)
+        # Belegschaft der Gebäude (Daten-Mod, CalcEmploymentPercent): Mannstärke-Gebäude wirken erst voll besetzt ganz (Nutzer 08.11.)
+        "armee": (am := armee.build(last, next(iter(empfehlungen._neueste(db, last["meta"]["tag"], "a.land")[0].values()), {}),
+                                    lambda o: _voll(voll, o), names, _voll(voll, "defines"), kp,
+                                    {k: w.get("CalcEmploymentPercent") for k, w in
+                                     empfehlungen._neueste(db, last["meta"]["tag"], "a.gebaeude")[0].items()}) if voll else {}),
         # Kachel Ländergründung (30.10.): Gründungen, die infrage kommen – Bedingungen, Gebiet, Besitzer (Spielstand ab Format 17),
         # Wirkung, Kette, Empfehlungen je Bereich; Daten-Mod für Stände-Macht, Rang-Stufe und Krieg (nach "nachbarn" – nutzt nb)
         # Daten-Mod nur, wenn er zu dieser Partie gehört (live_gehoert, Prüfer 30.10.)
@@ -950,6 +994,11 @@ def series(db, pid, names=None, wis=None, voll=None):
                                             lv if (lg := live_gehoert(db, pid, last["meta"]["tag"])) else None,
                                             next(iter(empfehlungen._neueste(db, last["meta"]["tag"], "a.land")[0].values()), {})
                                             if lg else {}, gruendung_spiel(db, last["meta"]["tag"]) if lg else None)),
+        # Besonderheiten des Landes (0.31 Teil 4, 08.11.): an Land, Kultur, Religion oder Lage gebundene Fortschritte, Einheiten,
+        # Reformen, Gesetze, Privilegien und Mechaniken, die für uns zutreffen (Übersicht im Spiel)
+        "besonderheiten": besonderheiten.fuer_series(last, lambda o: _voll(voll, o), names, wis) if voll else {},
+        # Ziele aus dem Spiel (Mod 0.31, Kästchen „Ländergründung als Ziel“) – für die Empfehlungen (nach "gruendung", vor "empfehlungen")
+        "ziel": (zl := ziele_lesen(db, last["meta"]["tag"])),
         # Karte „Handelsbestellungen und Zölle“ (27.10., Patch 1.4): Zölle je Route und Land, Herkunft der Routen, Spielstand
         # (zoelle/handelsbestellungen der Momentaufnahme gehen nur hierüber an die Seite – alle Zollsätze der Welt sind ~70 KB);
         # ab 29.10. Prüfung der Handelsbestellungen und Vorschläge je Schwerpunkt des Wirtschaftsplans (wp)
@@ -970,7 +1019,8 @@ def series(db, pid, names=None, wis=None, voll=None):
         # Empfehlungen (Regeln, 02.10.): Handlung, Begründung mit Zahlen, Wirkung (berechnet / Spielwert / messen)
         "empfehlungen": empfehlungen.build(db, snaps, lv, names, wis, _voll(voll, "estates"), _voll(voll, "script_values"),
                                            _voll(voll, "_modifikator_typen"), bauliste(last, names),
-                                           kw := krankheiten_wissen(voll, names), kr, nb, hz, techbaum=tv, gruendung=gr, wp=wp),
+                                           kw := krankheiten_wissen(voll, names), kr, nb, hz, techbaum=tv, gruendung=gr, wp=wp,
+                                           ziel=zl, kriegsplan=kp, armee=am),
         # Kachel Krankheiten: Grundwerte, Aktionen des Schwarzen Tods, Gebäude mit Seuchenwiderstand (Spieldateien)
         "krankheiten_wissen": kw,
         # 1.4: Preise in Politischem Einfluss (Regierungskachel)

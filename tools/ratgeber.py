@@ -216,6 +216,23 @@ def _read_log_stueck(db, reader):
     if klicks:
         browser_klick(klicks)
         recs = [r for r in recs if r["art"] != "browser"]
+    # Mod 0.31: Kästchen „Ländergründung als Ziel“ – geänderter Zustand (Klick, auch im pausierten Spiel) heißt neu rechnen
+    ziele, geaendert = [r for r in recs if r["art"] == "ziel"], []
+    if ziele:
+        recs = [r for r in recs if r["art"] != "ziel"]
+        with lock:
+            geaendert = history.ziele_speichern(db, ziele)
+        for tag, _ziel, wert in geaendert:
+            zustand = ue("an") if wert else ue("aus")
+            log(ue(t"Ländergründung als Ziel ({tag}): {zustand} – Empfehlungen werden neu gerechnet"))
+    # Mod 0.31: gespieltes Land (RG_LAND beim Laden, Öffnen, „Aktualisieren“; sonst die Monatszeilen) – ein Wechsel heißt neu rechnen
+    land = ingame.land_aus_log(recs, AKTIV["land"])
+    if land != AKTIV["land"]:
+        if AKTIV["land"]:
+            log(ue(t"Gespieltes Land: {land} – Seitenleiste wird neu geschrieben"))
+        AKTIV["land"] = land
+        geaendert = geaendert or [land]
+    recs = [r for r in recs if r["art"] != "land_aktiv"]
     if recs:
         for teil in history.monats_stuecke(recs):    # je Monat unter der Sperre: die Seite wartet nicht auf die ganze Datei
             with lock:
@@ -230,7 +247,7 @@ def _read_log_stueck(db, reader):
         log(ue(t"debug.log: {n['land']} Monat(e), {n['ort']} Orte, {n['gebaeude']} Gebäude, {n['markt']} Märkte, "
             t"{n['diplomatie']} Diplomatie, {n['finanzen']} Finanzen, {n['stand_einkommen']} Stände-Einkommen, "
             t"{n['text']} Texte - zuletzt {last['tag']} {last['jahr']}.{last['monat']}"))
-    return bool(recs)
+    return bool(recs) or bool(geaendert)
 
 
 FREMD_GEPRUEFT = set()
@@ -293,7 +310,7 @@ def ingame_schreiben(db, names, wis):
         return
     try:
         with lock:
-            pid = ingame.aktuelle_partie(db)
+            pid = ingame.aktuelle_partie(db, AKTIV["land"])
             d = ingame.daten(db, pid, names, wis, WISSEN_VOLL) if pid else None
         # Warnungen der Prüfung Spiel/Mod (Spiel-Update …) auch in der Übersicht im Spiel – das Konsolenfenster fehlt im
         # Hintergrundbetrieb (03.11.)
@@ -316,6 +333,8 @@ def ingame_schreiben(db, names, wis):
 
 
 INGAME = {"geschrieben": False, "fehlversuche": 0, "fehler": ""}
+# Mod 0.31: zuletzt gespieltes Land laut debug.log (ingame.land_aus_log) – bestimmt die Partie der Seitenleiste
+AKTIV = {"land": None}
 INGAME_GEDULD = 3                    # Fehlversuche in Folge: ein einzelner kann daher kommen, dass das Spiel die Datei gerade liest
 
 

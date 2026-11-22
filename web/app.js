@@ -3053,6 +3053,9 @@ function render(d) {
     // nach dem Wirtschaftsplan, immer sichtbar (Nutzerwunsch 31.10.): Einstellungen am Anfang je Schwerpunkt – startstrategie.js
     startstrategie: () => typeof startstrategieKachel === "function" ? sec("startstrategie", "Startstrategie", startstrategieKachel(d),
       { sub: ["Spielstand " + d.meta.datum, d.startstrategie?.mod_datum && "Mod " + d.startstrategie.mod_datum].filter(Boolean).join(" · ") }) : "",
+    // nach der Startstrategie (0.31 Teil 4, 08.11.): was das Land von anderen unterscheidet – besonderheiten.js
+    besonderheiten: () => typeof besonderheitenKachel === "function" ? sec("besonderheiten", "Besonderheiten des Landes",
+      besonderheitenKachel(d), { sub: "Spielstand " + d.meta.datum }) : "",
     finanzen: () => sec("finanzen", "Finanzen", L2("finanzen", finanzen(d, P), d, P), { sub: "Spielstand " + d.meta.datum }),
     produktion: () => sec("produktion", "Produktion", L2("produktion", produktion(d, P), d, P)),   // neben Finanzen (Nutzerwunsch 29.09.)
     handel: () => sec("handel", "Handel", L2("handel", handel(d, P), d, P), { sub }),
@@ -3087,6 +3090,8 @@ function render(d) {
     gruendung: () => typeof gruendungKachel === "function" ? sec("gruendung", "Ländergründung", gruendungKachel(d),
       { sub: ["Spielstand " + d.meta.datum, sub].filter(Boolean).join(" · ") }) : "",
     mehr: () => sec("mehr", "Militär und Kriege", L2("mehr", militaer(d, P), d, P), { sub }),   // Kredite in den Finanzen (01.10.)
+    // nach „Militär und Kriege“ (0.31 Teil 3, 08.11.): Größe und Zusammensetzung von Heer und Marine – armee.js
+    armee: () => typeof armeeKachel === "function" ? sec("armee", "Armee planen", armeeKachel(d), { sub }) : "",
     ...Object.fromEntries((d.kriege || []).map(w => [`krieg_${w.id}`, () => sec(`krieg_${w.id}`, `Krieg: ${w.name}`, kriegKachel(d, w),
       { sub: [w.datum_live && "Mod " + w.datum_live, w.datum_spielstand && "Spielstand " + w.datum_spielstand].filter(Boolean).join(" · ") })])),
     verlauf: () => sec("verlauf", "Verlauf", verlauf(d, P), { sub: `${d.punkte.length} Momentaufnahmen · ${(d.live || []).length} Live-Monate` }),

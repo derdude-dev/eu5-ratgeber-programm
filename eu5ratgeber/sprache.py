@@ -16,8 +16,10 @@ Zum Prüfen überschreibbar: EU5_RATGEBER_SPRACHE (z. B. l_english).
 """
 import functools
 import json
+import math
 import os
 import re
+from decimal import ROUND_HALF_UP, Decimal
 
 from . import pfade
 
@@ -89,3 +91,13 @@ def englisch(text):
 def ziffern(s):
     """Zahl im englischen Format („1,234.50“, wie f"{v:,.2f}") in die Schreibweise der Ausgabe."""
     return s.replace(",", "\x00").replace(".", ",").replace("\x00", ".") if DEUTSCH else s
+
+
+def zahl(v, n=2):
+    """Zahl mit n Nachkommastellen in der Schreibweise der Ausgabe, gerundet wie Intl.NumberFormat auf der Seite: kürzeste
+    Dezimaldarstellung, kaufmännisch (Prüfer 08.11.: f"{0.245:.2f}" gibt „0.24“, die Seite „0,25“)."""
+    f = float(v)
+    if not math.isfinite(f):                       # inf/nan wie bisher (Decimal kann sie nicht runden)
+        return ziffern(f"{f:,.{n}f}")
+    q = Decimal(repr(f)).quantize(Decimal(1).scaleb(-n), rounding=ROUND_HALF_UP)
+    return ziffern(f"{q:,.{n}f}")

@@ -31,7 +31,7 @@ import re
 import time
 from pathlib import Path
 
-from . import ingame_kacheln, ingame_symbole, ingame_tips as tips, livelog, pfade, sprache, wirtschaftsplan
+from . import besonderheiten, ingame_kacheln, ingame_symbole, ingame_tips as tips, livelog, pfade, sprache, wirtschaftsplan
 from .sprache import ue
 
 MOD_DIR = "eu5_ratgeber_daten"
@@ -47,6 +47,8 @@ LIVE_DATEI = live_datei()
 GUI_DATEI = Path("in_game/gui/rg_ratgeber.gui")       # ab Mod 0.26 – ohne sie schreibt der Ratgeber nichts
 SCHRITTE, EMPFEHLUNGEN, ZEILEN, KENNZAHLEN, WARNUNGEN = 5, 8, 12, 3, 3   # Felder in der Oberfläche
 JETZT = 3                                             # Schritte auf der Übersicht
+BESONDERHEITEN = 7                                    # Karten „Besonderheiten des Landes“: Grundlagen und je Art (0.31 Teil 4)
+BES_TIP = 22                                          # Einträge je Tooltip einer Besonderheit, der Rest als „… und n weitere“
 PRIO = {"hoch": 0, "mittel": 1, "niedrig": 2}
 PRIO_FARBE = {"hoch": f"#R {ue('hoch')}#!", "mittel": f"#Y {ue('mittel')}#!", "niedrig": ue("niedrig")}
 # Bereich -> (Banner button_banner_01_anim_<x>.dds, Farbe color_<x>_texture, Symbol tabicons/<x>.dds, Hintergrund der Karten und
@@ -99,6 +101,10 @@ def schluessel_allgemein():
     return ([f"RG_RATGEBER_KZ{i}{t}" for i in range(1, KENNZAHLEN + 1) for t in "LWT"]
             + [f"RG_RATGEBER_W{i}{t}" for i in range(1, WARNUNGEN + 1) for t in TEILE]
             + [f"RG_RATGEBER_GR{t}" for t in TEILE] + ["RG_RATGEBER_STAND"]
+            # 0.31 Teil 4: Besonderheiten des Landes (Karten B1 Grundlagen, B2… je Art)
+            + [f"RG_RATGEBER_B{i}{t}" for i in range(1, BESONDERHEITEN + 1) for t in TEILE]
+            # Mod 0.31: Kästchen „Ländergründung als Ziel“ (Beschriftung, Tooltip, Zustand der Rechnung „1“/„0“)
+            + ["RG_ZIEL_TEXT", "RG_ZIEL_TT", "RG_ZIEL_STAND", "RG_ZIEL_KEINE"]
             + [k for kid in ingame_kacheln.FEST for k in ingame_kacheln.schluessel(kid)])
 
 
@@ -368,6 +374,93 @@ def _gruendung(t, d):
     t["RG_RATGEBER_GRL"], t["RG_RATGEBER_GRZ"] = link["typ"], link["z"]
 
 
+# Art der Besonderheiten -> Bereichsschlüssel der Karte (BEREICHE: Symbol und Farbe); Grundlagen: society
+BES_BEREICH = {"fortschritte": "other", "einheiten": "expansion", "staat": "government", "gesetze": "government", "staende": "society",
+               "mechaniken": "government"}
+
+
+def _besonderheiten(t, d):
+    """Übersicht „Besonderheiten des Landes“ (0.31 Teil 4, Nutzer 08.11.): eine Karte mit den Grundlagen (Land, Kultur, Religion,
+    Regierungsform), dann je Art (Fortschritte, Einheiten, Staatsform, Gesetze, Stände, Mechaniken) Anzahl, die ersten Namen und im
+    Tooltip alle, gruppiert nach dem Grund; Klick öffnet das passende Fenster des Spiels."""
+    b = d.get("besonderheiten") or {}
+    karten = []
+    g = b.get("grundlagen")
+    if g:
+        kultur = (g.get("kultur") or "–") + (f" ({', '.join(g['kulturgruppen'])})" if g.get("kulturgruppen") else "")
+        religion = (g.get("religion") or "–") + (f" ({g['religionsgruppe']})" if g.get("religionsgruppe") else "")
+        zeile = ue(t"#bold {loc(g.get('land'))}:#! {loc(kultur)} · {loc(religion)} · {loc(g.get('regierungsform') or '–')}")
+        n = sum(a["anzahl"] for a in b.get("arten") or [])
+        zeilen = [ue(t"Land: {g.get('land')} ({g.get('tag')})"), ue(t"Kultur: {kultur}"), ue(t"Religion: {religion}"),
+                  ue(t"Regierungsform: {g.get('regierungsform') or '–'}"), ue(t"Hauptstadt: {g.get('hauptstadt') or '–'}"),
+                  ue("Gezählt wird, was die Spieldateien an Land, Kultur, Religion oder die Lage der Hauptstadt binden und für uns "
+                     "zutrifft, dazu, was diese Fortschritte freischalten. Regierungsform, Rang, Zeitalter und Kontinent allein zählen "
+                     "nicht – die teilen viele Länder.")]
+        if b.get("offen"):
+            zeilen.append(ue(t"{b['offen']} weitere hängen zusätzlich an Bedingungen, die der Ratgeber nicht prüfen kann."))
+        karten.append((zeile, str(n), tips.mit_titel(ue("Woran die Besonderheiten hängen"), zeilen), "society", None))
+    for a in (b.get("arten") or [])[:BESONDERHEITEN - 1]:
+        E = a["eintraege"]
+        namen = ", ".join(loc(x["name"]) for x in E[:3]) + (", …" if len(E) > 3 else "")
+        zeile = ue(t"#bold {loc(a['name'])}:#! {namen}")
+        marke = f"{a['aktiv']} / {a['anzahl']}" if a.get("aktiv") else str(a["anzahl"])
+        link = ingame_kacheln.ansicht(a.get("ansicht"))
+        karten.append((zeile, marke, _bes_tip(a), BES_BEREICH.get(a["key"], "other"), link))
+    for i in range(1, BESONDERHEITEN + 1):
+        z, m, tip, ber, link = karten[i - 1] if i <= len(karten) else ("", "", "", None, None)
+        t[f"RG_RATGEBER_B{i}"], t[f"RG_RATGEBER_B{i}K"] = z, loc(m)
+        t[f"RG_RATGEBER_B{i}T"] = loc(tips.mit_klick(tip, link and link["text"])) if z else ""
+        t[f"RG_RATGEBER_B{i}I"] = ber if z else ""
+        for s, f in (("L", "typ"), ("Z", "z"), ("O", "o")):
+            t[f"RG_RATGEBER_B{i}{s}"] = loc(link[f]) if link and z else ""
+
+
+def _bes_tip(a):
+    """Tooltip einer Art: je Grund (z. B. „Land ist oder war Walachei“) die Einträge mit Stand (erforscht, aktiv, freigeschaltet)."""
+    STATUS = besonderheiten.STATUS
+    gruppen = {}
+    for x in a["eintraege"]:
+        gr = x["gruende"][0]
+        gruppen.setdefault(gr["text"], []).append(
+            x["name"] + (f" ({STATUS[x['status']]})" if x.get("status") in STATUS else ""))
+    teile, n = [], 0
+    for kopf, namen in gruppen.items():
+        if n >= BES_TIP:
+            break
+        rest = namen[:BES_TIP - n]
+        n += len(rest)
+        teile.append(tips.abschnitt(kopf, [(0, x) for x in rest] if len(rest) > 1 else [(0, rest[0])]))
+    mehr = len(a["eintraege"]) - n
+    aktiv = ue(t", {a['aktiv']} davon erforscht, aktiv oder freigeschaltet") if a.get("aktiv") else ""
+    return tips._bloecke(tips.titel(ue(t"{a['name']}: {a['anzahl']} Besonderheiten{aktiv}")), *teile,
+                         tips.neben(ue(t"… und {mehr} weitere")) if mehr > 0 else "")
+
+
+def _ziel(t, d):
+    """Kästchen „Ländergründung als Ziel“ (Mod 0.31, Nutzer 08.11.): Beschriftung mit der Gründung der Auswahl der Kachel
+    Ländergründung, Tooltip und der Zustand, mit dem gerechnet wurde (die Seitenleiste vergleicht ihn mit dem Haken). Ohne Gründung
+    bleibt die Beschriftung leer – dann zeigt die Seitenleiste kein Kästchen, sondern RG_ZIEL_KEINE (Test 0.31, Bulgarien ohne
+    Gründung: „es ist kein schwerpunkt gründung da“ – ohne Zeile sah man nicht, warum)."""
+    g = d.get("gruendung") or {}
+    o = next((x for x in g.get("optionen") or [] if x.get("key") == g.get("standard")), None)
+    an = bool((d.get("ziel") or {}).get("gruendung"))
+    t["RG_ZIEL_STAND"] = "1" if an else "0"
+    t["RG_ZIEL_KEINE"] = "" if o or not g else loc(ue("Ländergründung als Ziel: zurzeit keine Gründung möglich (Kachel Ländergründung)"))
+    if not o:
+        t["RG_ZIEL_TEXT"], t["RG_ZIEL_TT"] = "", ""
+        return
+    gb = o.get("gebiet") or {}
+    t["RG_ZIEL_TEXT"] = loc(ue(t"Ländergründung als Ziel: {o['name']}")
+                            + (ue(t" ({gb['unsere']} von {gb['noetig']} Orten)") if gb.get("noetig") else ""))
+    n = sum(1 for r in d.get("empfehlungen") or [] if r.get("ziel"))
+    t["RG_ZIEL_TT"] = loc(tips.mit_titel(ue("Ländergründung als Ziel"), [
+        ue(t"Ist das Kästchen an, rechnet der Ratgeber die Gründung von {o['name']} in die Empfehlungen ein: fehlende Orte erobern oder "
+           t"Klientelländer eingliedern, Hauptstadt und offene Bedingungen. Diese Empfehlungen stehen in ihrer Stufe vorn."),
+        ue("Die Wahl gilt für diese Partie und steht im Spielstand. Nach dem Klick rechnet der Ratgeber neu, dann „Aktualisieren“ drücken."),
+        ue(t"Jetzt: an, {n} Empfehlungen zum Ziel.") if an else ue("Jetzt: aus."),
+        ue("Welche Gründung: die Auswahl der Kachel Ländergründung (gründbar zuerst, dann der größte Fortschritt).")]))
+
+
 def texte(d, jetzt=None, pruef=None, symbole=None):
     """{Schlüssel: Text} für alle Schwerpunkte (und „noch nichts gewählt“ = erster Schwerpunkt) aus den Daten der Seite.
     pruef: Warnungen der Prüfung Spiel/Mod ([{stufe, text, tun}], spielversion.pruefen) – zuerst in die Warnungen der Übersicht.
@@ -394,6 +487,8 @@ def texte(d, jetzt=None, pruef=None, symbole=None):
     _kennzahlen(t, d)
     _warnungen(t, d, pruef)
     _gruendung(t, d)
+    _ziel(t, d)
+    _besonderheiten(t, d)
     t.update(ingame_kacheln.texte(d, FOKUSSE + [""], loc))     # Kacheln der Seite (Mod 0.27)
     meta = d.get("meta") or {}
     t["RG_RATGEBER_STAND"] = (ue(t"{loc(meta.get('land'))} · Spielstand {loc(meta.get('datum'))}")
@@ -448,12 +543,24 @@ def daten(db, pid, names, wis, voll):
     return d
 
 
-def aktuelle_partie(db):
+def aktuelle_partie(db, land=None):
     """Partie der laufenden Sitzung: das Land der zuletzt gespeicherten Monatszeile des Daten-Mods, davon die Partie mit dem
     neuesten Spielstand (wie history.live_gehoert). Test 0.26: „neuester Spielstand überhaupt“ nahm einen Brandenburg-Stand aus
-    einer anderen Sitzung. Ohne Mod-Daten der neueste Spielstand überhaupt."""
-    row = db.execute("SELECT tag FROM monatswerte ORDER BY erfasst DESC LIMIT 1").fetchone()
+    einer anderen Sitzung. Ohne Mod-Daten der neueste Spielstand überhaupt.
+    land (Mod 0.31): das Land, das der Mod zuletzt als gespielt gemeldet hat (land_aus_log) – es gilt vor der Monatszeile, denn nach
+    dem Laden eines Spielstands kommt die erste Monatszeile erst einen Spielmonat später (Test 08.11.: Walachei geladen, Bulgarien
+    angezeigt). Ohne Spielstand dieses Landes: None (die Seitenleiste zeigt dann den Hinweis, dass der Ratgeber wartet)."""
+    row = (land,) if land else db.execute("SELECT tag FROM monatswerte ORDER BY erfasst DESC LIMIT 1").fetchone()
     q = ("SELECT m.partie_id FROM momentaufnahmen m JOIN dateien d ON d.pfad LIKE '%' || m.datei "
          + ("WHERE m.tag=? " if row else "") + "ORDER BY d.mtime DESC LIMIT 1")
     r = db.execute(q, (row[0],) if row else ()).fetchone()
     return r[0] if r else None
+
+
+def land_aus_log(recs, alt=None):
+    """Zuletzt gespieltes Land aus den Zeilen des debug.log (Mod 0.31): die Meldung RG_LAND (Spielstand geladen, Reiter geöffnet,
+    „Aktualisieren“) und die Monatszeilen des Landes, in der Reihenfolge der Datei – die letzte gilt. Ohne solche Zeilen alt."""
+    for r in recs:
+        if r.get("art") in ("land_aktiv", "land") and r.get("tag"):
+            alt = r["tag"]
+    return alt

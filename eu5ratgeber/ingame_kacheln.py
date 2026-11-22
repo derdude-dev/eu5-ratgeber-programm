@@ -29,7 +29,6 @@ import json
 import math
 import re
 import unicodedata
-from decimal import ROUND_HALF_UP, Decimal
 
 from . import ingame_tips as tips
 from . import sprache
@@ -145,6 +144,7 @@ KOPF_SYMBOL = {
     "Tote durch Krankheiten": "death", "befallene eigene Orte": "location", "in unserem Land": "death",
     "Bündnisse": "alliance", "Diplomaten": "diplomacy", "Diplomatiekapazität": "diplomatic_capacity",
     "Diplomatieruf": "diplomatic_reputation", "Antagonismus gegen uns": "antagonism", "Aufgebote": "levy", "Regulärtruppen": "regular",
+    "Vorschlag Heer": "regular", "Unterhalt Vorschlag": "expense", "Für Krieg": "army_strength", "Mannstärke-Quelle": "manpower",
     "Schiffe": "ship", "Armeetradition": "army_tradition", "Marinetradition": "navy_tradition", "Moral Heer / Flotte": "morale",
     "Festungsschwelle": "control", "Disziplin": "army_strength", "Kampf-Effizienz (Aufgebote)": "levy", "Militärtaktiken": "army_strength",
     "Belagerungsfähigkeit": "army_strength"}
@@ -196,11 +196,12 @@ LINKS = {"WPLAN": ("bau", "ort"), "SSTRAT": ("ansicht",), "FIN": ("ansicht",), "
          "DIPL": ("land",), "NACHB": ("land",), "GRUEND": ("ansicht",), "MIL": ("ansicht",)}
 # Link-Typen je Kartengruppe der Oberfläche (Schritte S, Empfehlungen E, Warnungen W, Gründung GR, Tabelle jetzt/Vorschlag T) –
 # Empfehlungen, Warnungen und Gründung öffnen nur Seitenleisten, die Tabelle auch die Diplomatie
-KARTEN_LINKS = {"S": LINK_TYPEN, "E": ("ansicht", "ort"), "W": ("ansicht",), "GR": ("ansicht",), "T": ("ansicht", "land")}
+KARTEN_LINKS = {"S": LINK_TYPEN, "E": ("ansicht", "ort"), "W": ("ansicht",), "GR": ("ansicht",), "T": ("ansicht", "land"),
+                "B": ("ansicht",)}                    # 0.31 Teil 4: Besonderheiten des Landes
 # Kachel einer Empfehlung (empfehlungen.py „kachel“) -> Seitenleiste des Spiels
 EMPF_ANSICHT = {"finanzen": "economy", "handel": "markets_overview", "gueter": "goods_overview", "produktion": "production",
                 "wirtschaftsplan": "production", "staende": "government", "diplomatie": "diplomacy", "nachbarn": "diplomacy",
-                "gruendung": "form_new_country", "orte": "locations_list", "forschung": "advances"}
+                "gruendung": "form_new_country", "orte": "locations_list", "forschung": "advances", "armee": "military_ledger"}
 _KEY = re.compile(r"[a-z][a-z0-9_]*")
 _TAG = re.compile(r"[A-Z][A-Z0-9]{2,5}")
 
@@ -272,6 +273,8 @@ KACHELN = (
      ("Land", "Bewertung", "Stärke uns : sie"), True),
     ("GRUEND", "Ländergründung", "aussen", "Gründung", "expansion", False, 4, 6, True, ("Land", "Orte", "Bedingungen"), True),
     ("MIL", "Militär und Kriege", "aussen", "Militär", "expansion", False, 9, 6, True, ("Wert", "Stand", ""), True),
+    # 0.31 Teil 3 (Nutzer 08.11.): Armeebuilder – Kopf mit Vorschlag und Bedarf, Tabelle der freigeschalteten Einheiten
+    ("ARMEE", "Armee planen", "aussen", "Armee", "expansion", False, 6, 8, False, ("Einheit", "Kampfkraft · Mann", "Gold / Monat"), True),
 )
 # Was die Kachel zeigt – fester Text unter dem Banner (Test 0.28: „die einzelheiten müssen noch besser erklärt werden, was genau
 # angezeigt wird“); was die Tabelle zeigt, steht direkt darüber (hinweis, mit den Zahlen des Stands)
@@ -314,6 +317,9 @@ ERKLAERUNG = {
     "MIL": "Deine Streitkräfte wie im Militärfenster. Aufgebote und Regulärtruppen in Mann: aufgestellt / möglich – 0 heißt: zurzeit "
            "keine aufgestellt, Aufgebote lassen sich nur im Krieg oder gegen Rebellen ausheben. Mannstärke und Seeleute in Tausend, "
            "jetzt / Höchstwert. Festungsschwelle: genutzt / Grenze.",
+    "ARMEE": "Wie groß das Heer sein sollte und womit du es füllst: Regulärtruppen bis zur Obergrenze des Spiels, so weit die "
+             "Mannstärke trägt, dazu der Bedarf für den Krieg mit dem besten Ziel (Kriegsplan). Der Vorschlag mischt Infanterie, Kavallerie und Tross nach einer Regel des "
+             "Ratgebers; die Zahlen der Einheiten stehen so in den Spieldateien.",
 }
 IDS = [k[0] for k in KACHELN]
 K = {k[0]: k for k in KACHELN}
@@ -347,8 +353,7 @@ def fmt(v, n=1):
     """Wie Intl.NumberFormat("de-DE") mit n Nachkommastellen: kürzeste Dezimaldarstellung, kaufmännisch gerundet, Tausenderpunkt."""
     if not num(v):
         return STRICH
-    q = Decimal(repr(float(v))).quantize(Decimal(1).scaleb(-n), rounding=ROUND_HALF_UP)
-    return sprache.ziffern(f"{q:,.{n}f}")
+    return sprache.zahl(v, n)
 
 
 def pct(v, n=0):
@@ -1419,9 +1424,91 @@ def militaer(d, P):
     return k
 
 
+def armee(d, P):
+    """Armee planen (0.31 Teil 3, Nutzer 08.11.: „armeebuilder, mit vorschlag zu armeegröße und zusammensetzung, äquivalent für
+    marine“): Stand, Obergrenze laut Spiel, Vorschlag bis zur Grenze, Bedarf für den Krieg mit dem besten Ziel, Schiffe; Tabelle der
+    freigeschalteten Einheiten (eu5ratgeber/armee.py)."""
+    k = _leer()
+    A = d.get("armee") or {}
+    h, m = A.get("heer") or {}, A.get("marine") or {}
+    if not h:
+        k["hinweis"] = ue("Noch keine Werte – der Armeebuilder braucht die Monatswerte des Daten-Mods.")
+        return k
+    vs = h.get("vorschlag") or []
+    kr, au = h.get("krieg"), h.get("ausser_reichweite")
+    k["kopf"] = [
+        _kz("Regulärtruppen", f"{fmt(h.get('jetzt'), 0)} / {fmt(h.get('grenze'), 0)}",
+            ue("stehendes Heer / Obergrenze laut Spiel (Mann), wie „Regulärtruppen ausheben“ im Militärfenster")),
+        _kz("Aufgebote", fmt(h.get("aufgebote"), 0), ue("möglich (Mann); laut Spiel nur im Krieg oder bei Rebellen auszuheben")),
+        _kz("Mannstärke", f"{fmt(h.get('mannstaerke'), 2)} / {fmt(h.get('max_mannstaerke'), 2)}", ue("in Tausend, wie in der Kopfzeile")),
+        _kz("Vorschlag Heer", ", ".join(ue(t"{v['anzahl']} × {v['einheit']}") for v in vs) or _vorschlag_leer(h.get("vorschlag_leer")),
+            ue(t"bis zur Obergrenze, höchstens so groß, wie die Mannstärke trägt (Zuwachs × {fmt(h.get('erholung_monate'), 0)} Monate, "
+               t"Spielwert der KI); Tross mindestens {pct(A.get('tross_anteil'), 0)} (Spielwert der KI), Kavallerie höchstens ein Drittel, je "
+               t"Kategorie die meiste Kampfkraft je Gold (Regel des Ratgebers)")),
+        _kz("Unterhalt Vorschlag", ue(t"{fmt(h['gold'], 2)} Gold / Monat") if num(h.get("gold")) else STRICH,
+            ue("geschätzt: Unterhaltsgüter je Regiment × Preis im Heimatmarkt, ohne Regler und Modifikatoren"),
+            ue(t"Saldo {fmt(h['saldo'], 2)}") if num(h.get("saldo")) else ""),
+        _kz("Für Krieg", ue(t"gegen {kr['name']}: +{fmt(kr['fehlt_mann'], 0)} Mann") if kr
+            else ue(t"{au['name']}: außer Reichweite") if au else ue("kein Ziel mit fehlender Stärke"),
+            (ue("mit Verbündeten geschätzt, Ziel 1,5 : 1 (Kriegsplan)") if kr.get("mit_verbuendeten") else ue("gegen das Land allein, Ziel 1,5 : 1"))
+            if kr else ue(t"Bündnis gegen Bündnis {fmt(au.get('verhaeltnis'), 2)} : 1, es fehlten +{fmt(au['fehlt_mann'], 0)} Mann – mehr als "
+                          t"doppelt so stark gilt als außer Reichweite (Regel des Ratgebers); kein Land in Reichweite mit Kriegsgrund oder "
+                          t"schaffbarem Kriegsgrund") if au else ue("laut Kriegsplan")),
+        _kz("Mannstärke-Quelle", _quelle_wert(h.get("naechste_quelle")), _quellen_tip(h.get("quellen") or [])),
+        _kz("Schiffe", f"{fmt(m.get('jetzt'), 0)} / {fmt(m.get('erwartet'), 0)}", ue("Schiffe / erwartete Marinegröße laut Spiel")),
+    ]
+    k["warn"] = list(h.get("grenzen") or [])
+    E = A.get("einheiten") or []
+    k["details"] = [(e["name"], ue(t"{fmt(e['kampfkraft'], 1)} · {fmt(e['mann'], 0)}") if e["heer"] else e["kategorie_name"],
+                     fmt(e.get("gold"), 2),
+                     tips.zeile(ue(t"{e['kategorie_name']}. Unterhalt je Regiment bzw. Schiff: ")
+                                + (", ".join(f"{g} {fmt(x, 2)}" for g, x in e["gueter"].items()) or STRICH)
+                                + (ue(t"; Kampfkraft je Gold {fmt(e['je_gold'], 2)}") if num(e.get("je_gold")) else "")),
+                     ansicht("military_ledger")) for e in E]
+    k["hinweis"] = (ue(t"Freigeschaltete Einheiten: Kampfkraft · Mann je Regiment (Spieldateien), Unterhalt in Gold je Monat geschätzt aus den "
+                       t"Preisen im Heimatmarkt. Schiffe: die KI des Spiels gibt Transporten {pct(m.get('schutz_anteil'), 0)} schwere Schiffe als "
+                       t"Schutz bei. Klick: Militärübersicht.") if E else ue("Noch keine Einheiten freigeschaltet (Fortschritte)."))
+    return k
+
+
+def _vorschlag_leer(grund):
+    """Kopfwert Vorschlag Heer ohne Regimenter (armee.build vorschlag_leer) – wie armeeVorschlagLeer auf der Seite."""
+    return {"mannstaerke": ue("keins – Mannstärke fasst kein Regiment"), "zu_wenig": ue("keins – Mannstärke trägt zu wenig"),
+            "traegt": ue("Mannstärke ausgeschöpft")}.get(
+        grund, ue("Obergrenze erreicht"))
+
+
+def _quelle_wert(nq):
+    """Kopfwert Mannstärke-Quelle: was als Nächstes Mannstärke bringt (armee.naechste_quelle)."""
+    if not nq:
+        return STRICH
+    art, q = nq
+    if art == "bauen":
+        return ue(t"{q['name']} in {q['ort']} bauen") if q.get("ort") else ue(t"{q['name']} bauen")
+    a = q["durch"][0] if q.get("durch") else {}
+    return ue(t"Fortschritt „{a.get('name') or q['name']}“")
+
+
+def _quellen_tip(Q):
+    """Tooltip: alle Mannstärke-Gebäude, die für uns infrage kommen, mit Wert und Stand."""
+    if not Q:
+        return ue("Laut Spiel kommt Mannstärke aus Mannstärke-Gebäuden oder bestimmten Fortschritten; für uns ist keins bekannt.")
+    zeilen = []
+    for q in Q:
+        if q["gebaut"]:
+            stand = ue(t"{q['gebaut']}× gebaut oder im Bau") + (ue(t", {fmt(q['belegt'] * 100, 0)} % besetzt") if num(q.get("belegt")) else "")
+        elif q["frei"]:
+            stand = ue("frei, nicht gebaut")
+        else:
+            stand = ue(t"Fortschritt „{q['durch'][0]['name']}“ nötig") if q.get("durch") else ue("nicht frei")
+        zeilen.append(ue(t"{q['name']}: {q['wert_text']} je Monat und Stufe{ue(', nur Hauptstadt') if q['hauptstadt'] else ''} – {stand}"))
+    return ue("Laut Spiel kommt Mannstärke aus Mannstärke-Gebäuden oder bestimmten Fortschritten. Monatliche Mannstärke laut Spieldatei "
+              "bei voller Belegschaft – sie wächst mit den Arbeitern: ") + "; ".join(zeilen)
+
+
 FEST = {"FIN": finanzen, "PROD": produktion, "HANDEL": handel, "GUETER": gueter, "ORTE": orte, "LAND": land, "REG": regierung,
         "STAENDE": staende, "REL": religion, "FORSCH": forschung, "KRANK": krankheiten, "DIPL": diplomatie, "NACHB": nachbarn,
-        "GRUEND": gruendung, "MIL": militaer}
+        "GRUEND": gruendung, "MIL": militaer, "ARMEE": armee}
 JE_FOKUS = {"EMPF": empfehlungen, "WPLAN": wirtschaftsplan, "SSTRAT": startstrategie}
 
 

@@ -1186,7 +1186,9 @@ def _empfehlungen(F, d, besitzer, ohne, fehlt, hand, eff, neu_rang, W, nm, besit
     for h in hand:
         {"militaer": mil, "diplomatie": dip}.get(h["bereich"], staat).append(
             {"text": h["text"], "grund": ue(t"Bedingung „{h['bedingung']}“ nicht erfüllt") + (ue(t" (jetzt: {h['ist']})") if h.get("ist") else "")
-             if not h.get("offen") else ue("Bedingung vom Ratgeber nicht auswertbar"), "offen": h.get("offen")})
+             if not h.get("offen") else ue("Bedingung vom Ratgeber nicht auswertbar"), "offen": h.get("offen"),
+             # Art des Eintrags (0.31, Ländergründung als Ziel: empfehlungen.r_gruendung_ziel macht daraus Empfehlungen)
+             "art": "bedingung"})
     if not besitz_bekannt and fehlt:
         mil.append({"text": ue(t"Es fehlen {fehlt} Orte – ") + (
                         ue("Besitzer stehen erst in Momentaufnahmen ab Format 17 (nächster Spielstand)") if besitz_fehlt != "kandidat" else
@@ -1210,14 +1212,15 @@ def _empfehlungen(F, d, besitzer, ohne, fehlt, hand, eff, neu_rang, W, nm, besit
         orte = ue(t"{b['orte']} benötigter Ort ({beispiele})") if b["orte"] == 1 else ue(t"{b['orte']} benötigte Orte ({beispiele})")
         if b["untertan"]:
             dip.append({"text": ue(t"{b['name']} eingliedern (Annexion): {orte}"),
-                        "grund": ue("Klientelland – seine Orte zählen erst nach der Eingliederung (Annahme des Ratgebers)")})
+                        "grund": ue("Klientelland – seine Orte zählen erst nach der Eingliederung (Annahme des Ratgebers)"), "art": "eingliedern"})
             continue
         if b["verbuendet"]:
             dip.append({"text": ue(t"{b['name']} ist verbündet und besitzt {orte}"),
-                        "grund": ue("Gegen einen Verbündeten erst nach Ende des Bündnisses vorgehen (Regel des Ratgebers)")})
+                        "grund": ue("Gegen einen Verbündeten erst nach Ende des Bündnisses vorgehen (Regel des Ratgebers)"), "art": "verbuendet"})
             continue
         if b["oberherr"]:
-            dip.append({"text": ue(t"{b['name']} ist unser Oberherr und besitzt {orte}"), "grund": ue("erst Unabhängigkeit (Regel des Ratgebers)")})
+            dip.append({"text": ue(t"{b['name']} ist unser Oberherr und besitzt {orte}"), "grund": ue("erst Unabhängigkeit (Regel des Ratgebers)"),
+                        "art": "oberherr"})
             continue
         grund = []
         if b["ampel"]:
@@ -1230,11 +1233,11 @@ def _empfehlungen(F, d, besitzer, ohne, fehlt, hand, eff, neu_rang, W, nm, besit
             grund.append(ue("Waffenstillstand mit uns"))
         if b["kriegsgrund"]:
             grund.append(ue("Kriegsgrund vorhanden"))
-        mil.append({"text": ue(t"Von {b['name']} holen: {orte}"), "grund": "; ".join(grund), "ampel": b["ampel"], "tag": b["tag"]})
+        mil.append({"text": ue(t"Von {b['name']} holen: {orte}"), "grund": "; ".join(grund), "ampel": b["ampel"], "tag": b["tag"], "art": "erobern"})
         if _num(b.get("buendnis_faktor")) and b["buendnis_faktor"] >= BUENDNIS_FAKTOR:
             dip.append({"text": ue(t"{b['name']} isolieren: Verteidigungsbündnis {_de(b['buendnis_faktor'], 1)}-mal so stark wie das Land allein"),
                         "grund": ue(t"Daten-Mod (defensive_alliance_strength ÷ country_strength); ab {_de(BUENDNIS_FAKTOR, 1)}-fach erst Bündnisse "
-                                 t"lösen oder eigene Verbündete gewinnen (Regel des Ratgebers)")})
+                                 t"lösen oder eigene Verbündete gewinnen (Regel des Ratgebers)"), "art": "isolieren"})
     if ohne and besitz_bekannt:
         mil.append({"text": ue(t"{ohne} benötigte Orte haben keinen Besitzer"), "grund": ue("Spielstand: Ort ohne Besitzer"), "offen": True})
     mods = rang_vergleich(W, F.get("rang"), neu_rang)

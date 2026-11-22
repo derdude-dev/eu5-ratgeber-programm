@@ -306,7 +306,51 @@ def build(save, names, player=None, fremde=None):
         snap["gruendung"] = gruendung.spielstand(save, c, cid, tags, locnames, snap)
     except Exception as e:                       # noqa: BLE001
         snap["gruendung"] = {"fehler": f"{type(e).__name__}: {e}"}
+    # ab 08.11. (0.31 Teil 2, Kriegsempfehlungen; ohne Formatsprung – neue Spielstände bringen das Feld mit, alte bleiben ohne):
+    # Kriegsgründe in beide Richtungen, laufendes Schaffen eines Kriegsgrunds, letzter Krieg je Land
+    try:
+        snap["kriegsgruende"] = kriegsgruende(save, tags, cid)
+    except Exception as e:                       # noqa: BLE001
+        snap["kriegsgruende"] = {"fehler": f"{type(e).__name__}: {e}"}
     return snap
+
+
+def _kb_typ(r):
+    """Art des Kriegsgrunds aus named_targets (flag casus_belli -> target.object)."""
+    for x in r.get("named_targets") or []:
+        if isinstance(x, dict) and x.get("flag") == "casus_belli":
+            return (x.get("target") or {}).get("object")
+    return None
+
+
+def kriegsgruende(save, tags, cid):
+    """Kriegsgründe laut Spielstand (0.31 Teil 2, Nutzer 08.11.: „konkrete kriegsempfehlungen, wer wann angegriffen werden kann, ob man
+    noch kriegsgründe erzeugen muss“). diplomacy_manager: casus_belli mit first = Inhaber, second = Ziel (geprüft 08.11. an Bulgarien ->
+    Byzanz und Holland -> Friesland gegen die Mod-Liste kb_ziel), create_casus_belli = wir schaffen gerade einen (Art, seit, progress in
+    Prozent – Walachei 1356: 82,3 seit 1355.4.10), und je Land unsere Beziehung diplomacy_manager/<wir>/relations/<Land> mit last_war
+    (Ende des letzten Kriegs miteinander) und war_score."""
+    out = {"wir_gegen": [], "gegen_uns": [], "schaffen": [], "letzter_krieg": {}}
+    if "diplomacy_manager" not in save.blocks:
+        return out
+    for r in _relations(save.raw("diplomacy_manager"), cid):
+        if r["art"] not in ("casus_belli", "create_casus_belli"):
+            continue
+        f, s = r.get("first"), r.get("second")
+        e = {"typ": _kb_typ(r), "seit": str(r["start_date"]) if r.get("start_date") is not None else None}
+        if r["art"] == "create_casus_belli":
+            if f == cid and tags.get(s):
+                out["schaffen"].append({**e, "tag": tags[s], "fortschritt": r.get("progress") if _num(r.get("progress")) else None})
+        elif f == cid and tags.get(s):
+            out["wir_gegen"].append({**e, "tag": tags[s]})
+        elif s == cid and tags.get(f):
+            out["gegen_uns"].append({**e, "tag": tags[f]})
+    raw = save.raw_entry("diplomacy_manager", cid)
+    rel = (pdx.parse_block(raw) or {}).get("relations") if raw else None
+    for k, v in (rel.items() if isinstance(rel, dict) else ()):
+        if isinstance(v, dict) and v.get("last_war") is not None and str(k).lstrip("-").isdigit() and tags.get(int(k)):
+            out["letzter_krieg"][tags[int(k)]] = {"datum": str(v["last_war"]),
+                                                  "kriegspunkte": v.get("war_score") if _num(v.get("war_score")) else None}
+    return out
 
 # ---------------------------------------------------------------- Zölle und Handelsbestellungen (ab Format 15, 27.10.)
 # Geprüft am Spielstand 1.4.4 (Walachei 1337.8.1, 27.10.):

@@ -130,7 +130,9 @@ def build(db, last, names=None, kriege=None):
     for k, d in dip.items():
         if k == tag:
             continue
-        r = {"tag": k, "name": nm(k), "beziehungen": sorted(set(d["beziehungen"])),
+        # Mod 0.31: „kbs_<art>“ = diesen Kriegsgrund könnten wir gegen sie schaffen (je Art eine Zeile) – keine Beziehung
+        r = {"tag": k, "name": nm(k), "beziehungen": sorted({b for b in d["beziehungen"] if not b.startswith("kbs_")}),
+             "kb_schaffbar": sorted({b[4:] for b in d["beziehungen"] if b.startswith("kbs_")}),
              "werte": {x: (fremd.get(k) or {}).get(x) for x in WERTE if _num((fremd.get(k) or {}).get(x))},
              "diplomatie": {x: d["werte"].get(x) for x in DIPLO if _num(d["werte"].get(x))},
              "sp": sp.get(k), "standard": any(b in STANDARD for b in d["beziehungen"])}
